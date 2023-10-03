@@ -5,7 +5,7 @@ from paho.mqtt.client import Client
 import json
 import requests
 from datetime import datetime
-from load_dotenv import dotenv_values
+from dotenv import dotenv_values
 d = dict()
 
 path = __file__
