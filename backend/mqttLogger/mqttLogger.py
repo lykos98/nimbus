@@ -8,7 +8,7 @@ from datetime import datetime
 from dotenv import dotenv_values
 d = dict()
 
-path = __file__
+path = "" 
 
 secrets = dotenv_values("../../.env")
 
@@ -39,9 +39,9 @@ validFields = [
 
 
 def writeToInflux(dataJSON):
-    databinary = f"sensors,sensorId={dataJSON['sensorId']} "
+    databinary = f"sensors,stationId={dataJSON['stationId']} "
     for k in dataJSON.keys(): 
-        if k != "sensorId":
+        if k != "stationId":
             databinary += f"{k}={dataJSON[k]},"
     databinary = databinary[:-1]
     databinary += f" {datetime.now().timestamp():.0f}"
@@ -98,9 +98,13 @@ def on_message(client, userdata, msg):
         writeLogs(f"Error loading json got: {msg.payload.decode()}", "m")
         return
 
+    if not ("stationId" in data.keys()):
+        return
+
     writeLogs(f"Recieved -> {data}", "l")
     stationId = data["stationId"]
 
+   # writeToInflux(data)
     try:
         writeToInflux(data)
     except:
