@@ -8,9 +8,9 @@ from datetime import datetime
 from dotenv import dotenv_values
 d = dict()
 
-path = "" 
+path = os.path.dirname(__file__) 
 
-secrets = dotenv_values("../../.env")
+secrets = dotenv_values(os.path.join(path,"../../.env"))
 
 GRAFANA_URL = secrets["GRAFANA_URL"]
 GRAFANA_APIKEY = secrets["GRAFANA_APIKEY"]
@@ -54,7 +54,7 @@ def writeToInflux(dataJSON):
 
 
 def writeLogs(msg, opt="l"):
-    with open(f"{path}msg.log", "a") as f:
+    with open(os.path.join(path,"msg.log"), "a") as f:
         if opt == "l":
             f.write(f"LOG {datetime.now()}: {msg}\n")
             print(f"LOG {datetime.now()}: {msg}\n")
