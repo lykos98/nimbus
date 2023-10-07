@@ -129,6 +129,7 @@ def on_message(client, userdata, msg):
 
 mqtt_client = Client("python_logger", clean_session=False)
 #mqtt_client.connect("127.0.0.1", keepalive=20)
+mqtt_client.username_pw_set(secrets["loggerUser"], secrets["loggerPassword"])
 mqtt_client.connect(secrets["broker_ip"], keepalive=20)
 mqtt_client.subscribe("esp32/sensors", qos=1)
 mqtt_client.on_message = on_message
