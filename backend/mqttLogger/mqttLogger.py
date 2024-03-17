@@ -93,9 +93,16 @@ def write_metrics(metrics, url, apikey):
 def on_message(client, userdata, msg):
     # standar interface to library
     try:
-        data = json.loads(msg.payload.decode())
+        d = msg.payload.decode()
     except:
-        writeLogs(f"Error loading json got: {msg.payload.decode()}", "m")
+        writeLogs(msg)("Cannot decode string")
+    try:
+        data = json.loads(d)
+    except:
+        try:
+            writeLogs(f"Error loading json got: {d}", "m")
+        except:
+            writeLogs("Cannot decode string")
         return
 
     if not ("stationId" in data.keys()):
