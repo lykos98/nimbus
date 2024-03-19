@@ -95,7 +95,7 @@ def on_message(client, userdata, msg):
     try:
         d = msg.payload.decode()
     except:
-        writeLogs(msg)("Cannot decode string")
+        writeLogs("Cannot decode string")
     try:
         data = json.loads(d)
     except:
