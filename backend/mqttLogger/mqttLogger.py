@@ -16,6 +16,8 @@ GRAFANA_URL = secrets["GRAFANA_URL"]
 GRAFANA_APIKEY = secrets["GRAFANA_APIKEY"]
 GRAFANA_USER = secrets["GRAFANA_USER"] 
 
+black_list = ["esp_lora_dummy"]
+
 influx_org = secrets["influx_org"]
 influx_bucket = secrets["influx_bucket"]
 influx_baseUrl = secrets["influx_baseUrl"]
@@ -46,11 +48,14 @@ def writeToInflux(dataJSON):
     databinary = databinary[:-1]
     databinary += f" {datetime.now().timestamp():.0f}"
     print(databinary)
-    try:
-        r = requests.post(influx_url, data=databinary, headers=influx_headers)
-        print(r.status_code)
-    except:
-        print("Cannot write to influx")
+    if dataJSON["stationId"] not in black_list:
+        try:
+            r = requests.post(influx_url, data=databinary, headers=influx_headers)
+            print(r.status_code)
+        except:
+            print("Cannot write to influx")
+    else:
+        writeLogs("Station blacklisted")
 
 
 def writeLogs(msg, opt="l"):
