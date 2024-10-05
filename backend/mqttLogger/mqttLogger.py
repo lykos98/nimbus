@@ -12,10 +12,6 @@ path = os.path.dirname(__file__)
 
 secrets = dotenv_values(os.path.join(path,"../../.env"))
 
-GRAFANA_URL = secrets["GRAFANA_URL"]
-GRAFANA_APIKEY = secrets["GRAFANA_APIKEY"]
-GRAFANA_USER = secrets["GRAFANA_USER"] 
-
 black_list = ["esp_lora_dummy"]
 
 influx_org = secrets["influx_org"]
@@ -68,33 +64,6 @@ def writeLogs(msg, opt="l"):
             print(f"MSG {datetime.now()}: {msg}\n")
     return
 
-
-def write_metrics(metrics, url, apikey):
-    headers = {
-        "Authorization": f"Bearer {GRAFANA_USER}:{GRAFANA_APIKEY}"
-    }
-    grafana_data = []
-    for m in metrics:
-        grafana_data.append(
-            {
-                'name': m[0],
-                'metric': m[0],
-                'value': float(m[2]),
-                'interval': int(m[1]),
-                'unit': '',
-                'time': int(m[3].timestamp()),
-                'mtype': 'count',
-                'tags': [],
-            }
-        )
-    # sort by ts
-    grafana_data.sort(key=lambda obj: obj['time'])
-    result = requests.post(url, json=grafana_data, headers=headers)
-    if result.status_code != 200:
-        raise Exception(result.text)
-    writeLogs('%s: %s' % (result.status_code, result.text), "m")
-
-
 def on_message(client, userdata, msg):
     # standar interface to library
     try:
@@ -124,19 +93,6 @@ def on_message(client, userdata, msg):
         return
 
     now = datetime.now()
-
-    metrics = []
-    for k, v in zip(data.keys(), data.values()):
-        if k != "stationId":
-            metrics.append(
-                (f"{stationId}.{k}", 180,  v, now),
-            )
-
-    try:
-        write_metrics(metrics, GRAFANA_URL, GRAFANA_APIKEY)
-    except:
-        writeLogs("Error while sending data to grafana", "m")
-        return
 
 
 mqtt_client = Client("python_logger", clean_session=False)

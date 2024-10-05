@@ -1,0 +1,67 @@
+body{
+    backgroundColor: "grey"
+}
+.top-container
+{
+    width : 100%;
+    display: flex; 
+    flex-direction: column; 
+    font-family: SUSE;
+
+}
+
+.date-picker{
+    margin-right: 1em;
+    margin-bottom: 5em;
+    width: 50em;
+}
+
+.selector-panel {
+    padding: 2em;
+    background-color: #EEEEEE;
+}
+
+.card-measures
+{
+    background-color: rgba(229,185,8,0.08);
+    transition: transform 0.15s;
+}
+
+.card-graph
+{
+    background-color: rgba(0,128,128,0.08);
+}
+
+.card-measures:hover {
+  transform: scale(1.05);
+}
+
+@keyframes animate-fade {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+}
+.graph
+{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    width: 100%;
+    background-color: lightblue;
+    transition: height 0.5s ease;
+}
+
+
+
+.graph-figure
+{
+    margin: 1em;
+    width: 45vw;
+    height: 500px;
+}
+
+.graph-container
+{
+    flex-grow: 1;
+}
+
+

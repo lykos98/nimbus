@@ -1,0 +1,7 @@
+plotly
+dash
+dash_bootstrap_components
+pandas
+numpy
+pytz
+influx_dbclient
