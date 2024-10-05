@@ -281,6 +281,6 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
 
 # Callbacks for interactivity (not implemented for this example)
 # You can add callbacks here for the date picker and station dropdown interactivity.
-
+server = app.server
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False, host="0.0.0.0")
