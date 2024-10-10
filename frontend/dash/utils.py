@@ -64,11 +64,11 @@ gauges = {
     }
 
 measures_colors = {
-        'airTemperature' : {'line_color' : "#E45756"},
-        'batteryV'       : {'line_color' : "#AB63FA"},
-        'solarV'         : {'line_color' : "#FFA15A"},
-        'airPressure'    : {'line_color' : "#BAB0AC"},
-        'airHumidity'    : {'line_color' : "#4C78A8"}
+        'airTemperature' : {'line_color' : "rgb(228,0,0)", "fillcolor" : "rgba(228,0,0,0.25)"},
+        'batteryV'       : {'line_color' : "rgb(171,99,250)", "fillcolor" : "rgba(171,99,250,0.25)"},
+        'solarV'         : {'line_color' : "rgb(255,161,90)", "fillcolor" : "rgba(255,161,90,0.25)"},
+        'airPressure'    : {'line_color' : "rgb(186,176,172)", "fillcolor" : "rgba(168,176,172,0.25)"},
+        'airHumidity'    : {'line_color' : "rgb(76,120,168)", "fillcolor" : "rgba(76,120,168,0.25)"}
 }
 
 measures_names = {
@@ -97,4 +97,10 @@ layout = {
         'airPressure'    : {'title' : 'Pressure', 'font' : axis_font_settings, 'title_font' : title_font_settings},
         'airHumidity'    : {'title' : 'Humidity', 'font' : axis_font_settings, 'title_font' : title_font_settings}
 
+        }
+windows = {
+        "None"    : "",
+        "Hour"    : "|> aggregateWindow(every: 1h, fn: mean)",
+        "Daily"   : "|> aggregateWindow(every: 1d, fn: mean)",
+        "Weekly"  : "|> aggregateWindow(every: 1w, fn: mean)",
         }
