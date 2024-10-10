@@ -1,6 +1,9 @@
 body{
     backgroundColor: "grey"
 }
+.export{
+    margin : 6px;
+}
 .top-container
 {
     width : 100%;
@@ -8,6 +11,10 @@ body{
     flex-direction: column; 
     font-family: SUSE;
 
+}
+
+.DateInput_input{
+    font-weight : bold;
 }
 
 .date-picker{
@@ -21,9 +28,10 @@ body{
     background-color: #EEEEEE;
 }
 
+
 .card-measures
 {
-    background-color: rgba(229,185,8,0.08);
+    background-color: rgba(244, 246, 255, 1);
     transition: transform 0.15s;
 }
 

@@ -13,6 +13,9 @@ import pytz
 from utils import *
 import os, sys
 
+#rgb(235, 131, 23)
+#rgb(243, 198, 35)
+
 external_stylesheets = [
         'https://fonts.googleapis.com/css2?family=SUSE:wght@100..800&display=swap',
         dbc.themes.BOOTSTRAP
@@ -82,11 +85,13 @@ def test_date(start_date, end_date):
     return stations
 
 
-def get_df(t_start, t_end, station, api):
+def get_df(t_start, t_end, station, win, api):
+    win_thing = windows[win]
     query = f"  from(bucket:\"t2\") \
                     |> range(start: {t_start}, stop: {t_end}) \
                     |> filter(fn: (r) => r._measurement == \"sensors\") \
                     |> filter(fn: (r) => r[\"stationId\"] == \"{station}\") \
+                    {win_thing}\
                     |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") \
                     |> yield() \
             "
@@ -134,9 +139,15 @@ def update_gauges(station, interval):
             name = f"{measures_names[col]}"
             value = f"{val : .1f} {measures_units[col]}"
             print(value)
-            cc.append(dbc.Col(html.P(f"{name}", style = {"textAlign" : "center", "fontSize" : "20px", "fontWeight" : "bold", "margin" : "auto"}), style = {"margin" : "auto"}))
+            cc.append(dbc.Col(html.P(f"{name}", style = {"textAlign" : "center", 
+                                                         "fontSize" : "20px", 
+                                                         "color" : "rgba(55, 12, 146, 1)", 
+                                                         "fontWeight" : "bold", 
+                                                         "margin" : "auto"}),
+                              style = {"margin" : "auto"}))
             cc.append(dbc.Col(html.Img(src = icons[col] , style = {'height' : "50px"}), style = {"margin" : "auto", "padding" : "1em"}, className = "col-md-auto"))
-            cc.append(dbc.Col(html.P(f"{value}", style = {"textAlign" : "center", "fontSize" : "20px", "margin" : "auto"}), style = {"margin" : "auto", "flexGrow" : "1", "padding" : "1em"}))
+            cc.append(dbc.Col(html.P(f"{value}", style = {"textAlign" : "center", "fontSize" : "20px", "margin" : "auto"}), 
+                              style = {"margin" : "auto", "flexGrow" : "1", "padding" : "1em"}))
             ret_children.append(dbc.Col(dbc.Card(dbc.Row(cc), className = "card-measures", style = {"padding" : "10px" })))
 
         dt = str((res["_time"].values[0])).split("T")
@@ -154,9 +165,10 @@ def update_gauges(station, interval):
     Input('station-id-dropdown', 'value'),
     Input('date-picker', 'start_date'),
     Input('date-picker', 'end_date'),
-    Input('interval-component', 'n_intervals')
+    Input('interval-component', 'n_intervals'),
+    Input('aggregate-window-selector', 'value')
 )
-def update_graph(station, start_date, end_date, interval):
+def update_graph(station, start_date, end_date, interval, win):
     import numpy as np
     t_start = datetime.fromisoformat(f"{start_date}T00:00:00.0000")
     t_start = localize_time(t_start) 
@@ -165,7 +177,7 @@ def update_graph(station, start_date, end_date, interval):
     t_stop = localize_time(t_stop) 
     print(station)
 
-    df = get_df(t_start, t_stop, station, query_api) 
+    df = get_df(t_start, t_stop, station, win, query_api) 
     print(df.columns)
 
     cc = [c for c in df.columns if c not in column_ignore]
@@ -180,7 +192,7 @@ def update_graph(station, start_date, end_date, interval):
             row = idx // 2 + 1
             col = idx % 2 + 1
             fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='spline') 
-            fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 5} )
+            fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 4})
             fig.update_layout(layout[c], paper_bgcolor='rgba(0,0,0,0)', xaxis_title = 'time', font_family = "SUSE" )
             if(c == 'batteryV'):
                 fig.update_yaxes(range = [0,4.5])
@@ -196,7 +208,7 @@ def update_graph(station, start_date, end_date, interval):
                                 figure = fig,
                                 className = 'graph-figure',
                                 style = {'borderRadius' : '10px', 'backgroundColor' : 'white', 'padding' : '1em',
-                                         'borderColor' : 'rgba(0,128,128,0.4)',
+                                         'borderColor' : 'rgba(16, 55, 92, 0.4)',
                                          'borderWidth' : '2px',
                                          'borderStyle' : 'solid'})
                     )
@@ -244,7 +256,13 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
             dcc.Dropdown(
                 id='station-id-dropdown',
                 style={'width': '100%', }
-            )
+            ),
+
+            html.Label("Aggregate window:", style={'fontSize': '18px'}),
+            dcc.Dropdown(
+                id='aggregate-window-selector',
+                options = ["None", "Hour", "Daily", "Weekly"],
+                style={'width': '100%', }, value = "None"),
         ], width=6),
         dcc.Interval(
             id='interval-component',
@@ -283,4 +301,4 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
 # You can add callbacks here for the date picker and station dropdown interactivity.
 server = app.server
 if __name__ == '__main__':
-    app.run_server(debug=False, host="0.0.0.0")
+    app.run_server(debug=True, host="0.0.0.0")
