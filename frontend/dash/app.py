@@ -145,10 +145,13 @@ def update_gauges(station, interval):
                                                          "fontWeight" : "bold", 
                                                          "margin" : "auto"}),
                               style = {"margin" : "auto"}))
-            cc.append(dbc.Col(html.Img(src = icons[col] , style = {'height' : "50px"}), style = {"margin" : "auto", "padding" : "1em"}, className = "col-md-auto"))
-            cc.append(dbc.Col(html.P(f"{value}", style = {"textAlign" : "center", "fontSize" : "20px", "margin" : "auto"}), 
+            cc.append(dbc.Col(html.Img(src = icons[col] , style = {'height' : "50px", 'margin' : 'auto'}), 
+                              style = {"margin" : "auto", 'textAlign' : 'center'}))
+            cc.append(dbc.Col(html.P(f"{value}", style = {"textAlign" : "center", "fontSize" : "20px", "margin" : "auto", "white-space" : "nowrap"}), 
                               style = {"margin" : "auto", "flexGrow" : "1", "padding" : "1em"}))
-            ret_children.append(dbc.Col(dbc.Card(dbc.Row(cc), className = "card-measures", style = {"padding" : "10px" })))
+            ret_children.append(dbc.Col(dbc.Card(dbc.Row(cc, style = {'marigin' :  'auto'}), 
+                                                 className = "card-measures", 
+                                                 style = {"padding" : "10px", "margin" : "auto", "minWidth" : "150px", "marginTop" : "10px" })))
 
         dt = str((res["_time"].values[0])).split("T")
         date = dt[0]
@@ -194,6 +197,8 @@ def update_graph(station, start_date, end_date, interval, win):
             fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='spline') 
             fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 4})
             fig.update_layout(layout[c], paper_bgcolor='rgba(0,0,0,0)', xaxis_title = 'time', font_family = "SUSE" )
+            fig.update_layout(margin=dict(l=10, r=20, t=40, b=10), 
+                              autosize = True)
             if(c == 'batteryV'):
                 fig.update_yaxes(range = [0,4.5])
             if(c == 'solarV'):
@@ -203,14 +208,23 @@ def update_graph(station, start_date, end_date, interval, win):
             if(c == 'airPressure'):
                 fig.update_yaxes(range = [90000,110000])
 
-            figs.append(
+            figs.append(dbc.Col(html.Div(
                             dcc.Graph(
                                 figure = fig,
                                 className = 'graph-figure',
-                                style = {'borderRadius' : '10px', 'backgroundColor' : 'white', 'padding' : '1em',
+                                style = {'borderRadius' : '10px', 'backgroundColor' : 'white', 'padding' : '2px',
                                          'borderColor' : 'rgba(16, 55, 92, 0.4)',
+                                         'aspectRatio' : 16 / 9,
                                          'borderWidth' : '2px',
-                                         'borderStyle' : 'solid'})
+                                         'borderStyle' : 'solid', 
+                                         'margin' : 'auto', 
+                                         'marginTop' : '10px', 
+                                         'width': '100%'},
+                                config = dict(responsive = True)
+                                ),
+                            ),
+                            md = 6, xs = 12
+                        )
                     )
             idx += 1
 
@@ -224,7 +238,8 @@ def update_graph(station, start_date, end_date, interval, win):
                  export_format="csv",
             )
     
-    return figs, data_table
+    figs2 = [dbc.Row(figs[i:i+2], className = "mb4") for i in range(0,len(figs),2)]
+    return figs2, data_table
 
 # Create Dash App
 
@@ -275,14 +290,9 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
     dbc.Tabs([
         dbc.Tab(label = "Graphs",
             children = [dbc.Row(id = 'gauges', className = "m-3"),
-                        #dbc.Card(
-                        #    dbc.Row(    id = 'graph-content', 
-                        #                className = 'rounded-3', 
-                        #            style={'marginTop': '30px', 'justifyContent' : 'space-around' }),
-                        #    style = {'backgroundColor' : 'rgba(0,128,128,0.02)' })],
-                            dbc.Row(    id = 'graph-content', 
-                                        className = 'rounded-3', 
-                                    style={'marginTop': '30px', 'justifyContent' : 'space-around' }),
+                        dbc.Row(id = 'graph-content', 
+                                className = 'rounded-3', 
+                                style={'marginTop': '30px', 'justifyContent' : 'space-around' }),
                         ]
             ),
         dbc.Tab(label = "Table", id = 'data-table'),
