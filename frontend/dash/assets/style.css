@@ -33,11 +33,7 @@ body{
 {
     background-color: rgba(244, 246, 255, 1);
     transition: transform 0.15s;
-}
-
-.card-graph
-{
-    background-color: rgba(0,128,128,0.08);
+    zoom: 1;
 }
 
 .card-measures:hover {
@@ -48,28 +44,31 @@ body{
     0% { opacity: 0; }
     100% { opacity: 1; }
 }
-.graph
-{
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-around;
-    width: 100%;
-    background-color: lightblue;
-    transition: height 0.5s ease;
-}
-
 
 
 .graph-figure
 {
     margin: 1em;
-    width: 45vw;
-    height: 500px;
+    zoom: 0.5;
 }
 
-.graph-container
-{
-    flex-grow: 1;
+
+@media (min-width: 768px) {
+  .graph-figure {
+    zoom: 0.85;
+  }
+  .card-measures {
+    zoom: 0.90;
+  }
+}
+
+@media (min-width: 1024px) {
+    .graph-figure {
+        zoom: 1;
+    }
+    .card-measures {
+        zoom: 1;
+    }
 }
 
 
