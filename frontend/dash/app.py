@@ -140,18 +140,20 @@ def update_gauges(station, interval):
             value = f"{val : .1f} {measures_units[col]}"
             print(value)
             cc.append(dbc.Col(html.P(f"{name}", style = {"textAlign" : "center", 
-                                                         "fontSize" : "20px", 
+                                                         "fontSize" : "16px", 
                                                          "color" : "rgba(55, 12, 146, 1)", 
                                                          "fontWeight" : "bold", 
                                                          "margin" : "auto"}),
                               style = {"margin" : "auto"}))
-            cc.append(dbc.Col(html.Img(src = icons[col] , style = {'height' : "50px", 'margin' : 'auto'}), 
+            cc.append(dbc.Col(html.Img(src = icons[col] , style = {'height' : "40px", 'margin' : 'auto'}), 
                               style = {"margin" : "auto", 'textAlign' : 'center'}))
-            cc.append(dbc.Col(html.P(f"{value}", style = {"textAlign" : "center", "fontSize" : "20px", "margin" : "auto", "white-space" : "nowrap"}), 
+            cc.append(dbc.Col(html.P(f"{value}", style = {"textAlign" : "center", "fontSize" : "18px", "margin" : "auto", "whiteSpace" : "nowrap"}), 
                               style = {"margin" : "auto", "flexGrow" : "1", "padding" : "1em"}))
             ret_children.append(dbc.Col(dbc.Card(dbc.Row(cc, style = {'marigin' :  'auto'}), 
                                                  className = "card-measures", 
-                                                 style = {"padding" : "10px", "margin" : "auto", "minWidth" : "150px", "marginTop" : "10px" })))
+                                                 style = {"padding" : "10px", "margin" : "auto", "minWidth" : "150px", "marginTop" : "10px" }
+                                                 ), style = {'margin' : 'auto'}
+                                        ))
 
         dt = str((res["_time"].values[0])).split("T")
         date = dt[0]
@@ -197,8 +199,7 @@ def update_graph(station, start_date, end_date, interval, win):
             fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='spline') 
             fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 4})
             fig.update_layout(layout[c], paper_bgcolor='rgba(0,0,0,0)', xaxis_title = 'time', font_family = "SUSE" )
-            fig.update_layout(margin=dict(l=10, r=20, t=40, b=10), 
-                              autosize = True)
+            fig.update_layout(margin=dict(l=10, r=20, t=40, b=10))
             if(c == 'batteryV'):
                 fig.update_yaxes(range = [0,4.5])
             if(c == 'solarV'):
@@ -212,15 +213,16 @@ def update_graph(station, start_date, end_date, interval, win):
                             dcc.Graph(
                                 figure = fig,
                                 className = 'graph-figure',
-                                style = {'borderRadius' : '10px', 'backgroundColor' : 'white', 'padding' : '2px',
+                                style = {'borderRadius' : '10px', 'backgroundColor' : 'white',
                                          'borderColor' : 'rgba(16, 55, 92, 0.4)',
                                          'aspectRatio' : 16 / 9,
                                          'borderWidth' : '2px',
                                          'borderStyle' : 'solid', 
+                                         'height' : '100%', 
+                                         'width' : '100%', 
                                          'margin' : 'auto', 
-                                         'marginTop' : '10px', 
-                                         'width': '100%'},
-                                config = dict(responsive = True)
+                                         'padding' : 'auto',
+                                         'marginTop' : '10px'},
                                 ),
                             ),
                             md = 6, xs = 12
@@ -238,7 +240,7 @@ def update_graph(station, start_date, end_date, interval, win):
                  export_format="csv",
             )
     
-    figs2 = [dbc.Row(figs[i:i+2], className = "mb4") for i in range(0,len(figs),2)]
+    figs2 = [dbc.Row(figs[i:min(i+2, len(figs))], className = "mb4") for i in range(0,len(figs),2)]
     return figs2, data_table
 
 # Create Dash App
@@ -289,8 +291,8 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
     # Content Area
     dbc.Tabs([
         dbc.Tab(label = "Graphs",
-            children = [dbc.Row(id = 'gauges', className = "m-3"),
-                        dbc.Row(id = 'graph-content', 
+                children = [dbc.Row(id = 'gauges', className = "m-3", style = {'margin' : 'auto', 'padding' : 'auto'}),
+                            dbc.Row(id = 'graph-content', 
                                 className = 'rounded-3', 
                                 style={'marginTop': '30px', 'justifyContent' : 'space-around' }),
                         ]
