@@ -52,14 +52,25 @@ body{
     height: 100%;
 }
 
+.graph-content
+{
+    margin: auto;
+    padding: auto;
+    width: 100%;
+}
 
-@media (min-width: 768px) {
-  .graph-figure {
-    zoom: 0.85;
-  }
-  .card-measures {
-    zoom: 0.90;
-  }
+
+@media (min-width: 600px) {
+    .graph-figure {
+      zoom: 0.85;
+    }
+    .card-measures {
+        zoom: 0.90;
+    }
+    .graph-content
+    {
+        width: 100%;
+    }
 }
 
 @media (min-width: 1024px) {
@@ -68,6 +79,10 @@ body{
     }
     .card-measures {
         zoom: 1;
+    }
+    .graph-content
+    {
+        width: 95%;
     }
 }
 
