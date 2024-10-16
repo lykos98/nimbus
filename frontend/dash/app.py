@@ -37,6 +37,18 @@ print(pytz.country_timezones("it"))
 t_start = str((datetime.now(pytz.timezone("Europe/Rome")) - timedelta(days = 1)).isoformat())
 t_stop  = str(datetime.now(pytz.timezone("Europe/Rome")).isoformat())
 
+@callback(
+        Output('date-picker', 'start_date'),
+        Output('date-picker', 'end_date'),
+        Input('date-picker', 'min_date_allowed'),
+        )
+def today_date(vv):
+
+    end_date = (datetime.now()).date()
+    start_date = (datetime.now() - timedelta(days = 2)).date()
+    print(start_date, end_date)
+    return start_date, end_date
+
 
 def get_query(start, stop):
     query = f"  from(bucket:\"t2\") \
@@ -222,7 +234,8 @@ def update_graph(station, start_date, end_date, interval, win):
                                          'width' : '100%', 
                                          'margin' : 'auto', 
                                          'padding' : 'auto',
-                                         'marginTop' : '10px'},
+                                         'marginTop' : '10px',
+                                         'paddingTop' : '10px'},
                                 ),
                             ),
                             md = 6, xs = 12
@@ -245,8 +258,6 @@ def update_graph(station, start_date, end_date, interval, win):
 
 # Create Dash App
 
-# Colors
-
 # Layout of the dashboard
 app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, children=[
     # Header
@@ -261,40 +272,46 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
             html.Label("Select Date Range:", style={ 'fontSize': '18px'}),
             dcc.DatePickerRange(
                 id='date-picker',
-                start_date = (datetime.now() - timedelta(days = 2)).date(),
-                end_date = (datetime.now()).date(),
+                min_date_allowed = datetime(2024,1,1).date(),
                 display_format='YYYY-MM-DD',
                 style={'width': '100%', 'padding': '10px'}
             )
-        ], width=6),
+        ], md=6, xs=12),
         
         dbc.Col([
-            html.Label("Select Station ID:", style={'fontSize': '18px'}),
-            dcc.Dropdown(
-                id='station-id-dropdown',
-                style={'width': '100%', }
-            ),
+            dbc.Row([
+                    dbc.Col([
+                        html.Label("Select Station ID:", style={'fontSize': '17px'}),
+                        dcc.Dropdown(
+                            id='station-id-dropdown',
+                            style={'width': '100%', })
+                        ], width = 6),
+                    dbc.Col([
+                        html.Label("Average window:", style={'fontSize': '17px'}),
+                        dcc.Dropdown(
+                            id='aggregate-window-selector',
+                            options = ["None", "Hour", "Daily", "Weekly"],
+                            style={'width': '100%', }, value = "None"),
+                        ], width = 6) 
+                    ], style = {'padding' : '10px', 'justifyContent' : 'space-around'}),
 
-            html.Label("Aggregate window:", style={'fontSize': '18px'}),
-            dcc.Dropdown(
-                id='aggregate-window-selector',
-                options = ["None", "Hour", "Daily", "Weekly"],
-                style={'width': '100%', }, value = "None"),
-        ], width=6),
+        ], xs = 12, md = 6),
         dcc.Interval(
             id='interval-component',
             interval=60*1000, # in milliseconds
             n_intervals=0
         )
-    ], style={'marginTop': '20px'}),
+        ], style={'marginTop': '20px', 'marginBottom' : '20px'}),
     
     # Content Area
     dbc.Tabs([
         dbc.Tab(label = "Graphs",
-                children = [dbc.Row(id = 'gauges', className = "m-3", style = {'margin' : 'auto', 'padding' : 'auto'}),
-                            dbc.Row(id = 'graph-content', 
-                                className = 'rounded-3', 
-                                style={'marginTop': '30px', 'justifyContent' : 'space-around' }),
+                children = [dcc.Loading(dbc.Row(id = 'gauges', className = "m-3", style = {'margin' : 'auto', 'padding' : 'auto'}), delay_show = 500, delay_hide = 500),
+                            dcc.Loading(dbc.Row(id = 'graph-content', 
+                                className = 'graph-content', 
+                                                style={'marginTop': '30px', 'justifyContent' : 'space-around' }), 
+                                        overlay_style={"visibility":"visible", "opacity": .5, "backgroundColor": "white"}, 
+                                        delay_show = 500, delay_hide = 500),
                         ]
             ),
         dbc.Tab(label = "Table", id = 'data-table'),
