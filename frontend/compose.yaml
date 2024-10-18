@@ -1,0 +1,14 @@
+services:
+  dash:
+    build: .
+    image: dash:latest
+    ports:
+      - "8050:8050"
+
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro" 
+      - "/etc/timezone:/etc/timezone:ro" 
+    environment:
+      - INFLUX_TOKEN=${INFLUX_TOKEN} --name dash dash:latest 
+
+
