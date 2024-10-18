@@ -2,6 +2,7 @@ services:
   dash:
     build: .
     image: dash:latest
+    container-name: dash
     ports:
       - "8050:8050"
 
