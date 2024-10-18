@@ -9,6 +9,5 @@ services:
       - "/etc/localtime:/etc/localtime:ro" 
       - "/etc/timezone:/etc/timezone:ro" 
     environment:
-      - INFLUX_TOKEN=${INFLUX_TOKEN} --name dash dash:latest 
-
+      - INFLUX_TOKEN=${INFLUX_TOKEN} 
 
