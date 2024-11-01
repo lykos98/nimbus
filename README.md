@@ -12,7 +12,10 @@ Maybe one day to share these kits among people, and to grow a community around c
 ## TODO
 Frontend:
 - fix thing date in axis of plots
-- fix selector on date and coherence between date of the container and date of the host
-- fix padding of graph container div
-- add loading screen when dealing with graphs
 - improve overall look
+Stations:
+- implement configurator to configure wifi at first boot 
+- implement automatic certificate retrieval
+- migrate all stations to mqtt with ssl
+Backend:
+- server for ca.crt obtaining

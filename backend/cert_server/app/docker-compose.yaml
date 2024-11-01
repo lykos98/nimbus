@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  flask_app:
+    build:
+      context: .  # Use the current directory for the Dockerfile
+    ports:
+      - "5000:5000"  # Map container's port 5000 to host's port 5000
+    volumes:
+      - ./certs:/app/certs  # Mount the certs folder to persist changes
+    restart: always  # Restart policy to ensure service stays up
