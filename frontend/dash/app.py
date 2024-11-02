@@ -311,7 +311,7 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
                                 className = 'graph-content', 
                                                 style={'marginTop': '30px', 'justifyContent' : 'space-around' }), 
                                         overlay_style={"visibility":"visible", "opacity": .5, "backgroundColor": "white"}, 
-                                        delay_show = 500, delay_hide = 500),
+                                        delay_hide = 500),
                         ]
             ),
         dbc.Tab(label = "Table", id = 'data-table'),
