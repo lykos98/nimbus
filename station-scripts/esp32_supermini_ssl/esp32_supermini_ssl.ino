@@ -8,9 +8,6 @@
 
 #include "esp32_utilities.h"
 
-char id[] = "esp_supermini";
-
-
 Adafruit_BMP280 bmp; // I2C
 
 //WiFiClient wifiClient;
@@ -78,7 +75,7 @@ void setup() {
 
   float battery_voltage = read_avg_v(0);
 
-  sprintf(message, "{\"stationId\":\"%s\",\"airTemperature\":%.2f,\"airPressure\":%.2f,\"batteryV\":%.2f}",id,t,p,battery_voltage);
+  sprintf(message, "{\"stationId\":\"%s\",\"airTemperature\":%.2f,\"airPressure\":%.2f,\"batteryV\":%.2f}",station_id.c_str(),t,p,battery_voltage);
   mqttClient.beginMessage(topic);
   mqttClient.print(message);
   mqttClient.endMessage();
