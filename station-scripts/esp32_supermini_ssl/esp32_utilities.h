@@ -1,3 +1,4 @@
+#include "esp_wifi_types.h"
 #include "pins_arduino.h"
 #include "esp32-hal-gpio.h"
 #include <WiFi.h>
@@ -5,12 +6,18 @@
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <WebServer.h>
+#include <DNSServer.h> 
 
 const char* hash_url = "https://cert.lykos.cc/ca-cert-hash"; // URL for hash endpoint
 const char* cert_url = "https://cert.lykos.cc/ca-cert";      // URL for full certificate
 
 Preferences preferences;
 WebServer server(80);  // Create a web server on port 80
+
+#define DNS_PORT 53
+DNSServer dns_server;
+
+#define MAX_STR_LEN 40
 
 void print_status()
 {
@@ -129,7 +136,7 @@ String load_certificate() {
 * --------------------------------*/
 
 
-String ssid, password;
+String ssid, password, station_id;
 #define RESET_PIN 4
 
 void start_config_portal() {
@@ -140,6 +147,8 @@ void start_config_portal() {
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
+  dns_server.start(DNS_PORT, "*", IP);
+
 
   server.on("/", HTTP_GET, []() {
     server.send(200, "text/html", 
@@ -150,10 +159,13 @@ void start_config_portal() {
                 "<h3> Insert ssid and password </h3>\n"
                 "<form action=\"/save\" method=\"post\">\n"
                     "<div style=\"padding:1em\">\n"
-                        "SSID:<br> <input type=\"text\" name=\"ssid\"><br>\n"
+                        "Station id:<br> <input type=\"text\" name=\"station_id\" maxlength=40><br>\n"
                     "</div>\n"
                     "<div style=\"padding:1em\">\n"
-                        "Password:<br> <input type=\"password\" name=\"password\"><br>\n"
+                        "SSID:<br> <input type=\"text\" name=\"ssid\" maxlength=40><br>\n"
+                    "</div>\n"
+                    "<div style=\"padding:1em\">\n"
+                        "Password:<br> <input type=\"password\" name=\"password\" maxlength=40><br>\n"
                     "</div>\n"
                     "<input type=\"submit\" value=\"Save\">\n"
                 "</form>\n"
@@ -165,22 +177,35 @@ void start_config_portal() {
   });
 
   server.on("/save", HTTP_POST, []() {
-    ssid = server.arg("ssid");
-    password = server.arg("password");
+    ssid       = server.arg("ssid");
+    password   = server.arg("password");
+    station_id = server.arg("station_id");
 
-    preferences.begin("wifi-config", false);  // Open preferences in read-write mode
-    preferences.putString("ssid", ssid);
-    preferences.putString("password", password);
-    preferences.end();
+    if( ssid.length() <= MAX_SSID_LEN && 
+        password.length() <= MAX_STR_LEN &&
+        station_id.length() <= MAX_STR_LEN && station_id.length() >= 4)
+    {
+      preferences.begin("wifi-config", false);  // Open preferences in read-write mode
+      preferences.putString("ssid", ssid);
+      preferences.putString("password", password);
+      preferences.putString("station_id", station_id);
+      preferences.end();
 
-    server.send(200, "text/html", "<h1>Configuration Saved! Rebooting...</h1>");
-    delay(2000);
-    ESP.restart();
+
+      server.send(200, "text/html", "<h1>Configuration Saved! Rebooting...</h1>");
+      delay(2000);
+      ESP.restart();
+    }
+    else {
+      server.send(200, "text/html", "<h1>Cannot save preferences, malformed strings</h1>");
+    }
+    
   });
 
   server.begin();
   while(1)
   { 
+    dns_server.processNextRequest();
     server.handleClient();
     delay(2);
   }
@@ -216,8 +241,9 @@ void blink_n_times(int n = 5)
 void connect_to_wifi() {
   WiFi.mode(WIFI_STA);
   preferences.begin("wifi-config", false);
-  ssid     = preferences.getString("ssid", "");
-  password = preferences.getString("password", "");
+  ssid       = preferences.getString("ssid", "");
+  password   = preferences.getString("password", "");
+  station_id = preferences.getString("station_id","");
   preferences.end();
 
   int try_count = 0;
