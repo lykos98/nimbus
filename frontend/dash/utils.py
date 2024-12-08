@@ -1,4 +1,4 @@
-allowed_meausures = ['airTemperature', 'airHumidity', 'airPressure', 'batteryV', 'solarV']
+allowed_meausures = ['airTemperature', 'airHumidity', 'airPressure', 'batteryV', 'solarV', 'windSpeed']
 icons = {
         'airTemperature' : 'assets/temp.svg',
         'batteryV'       : 'assets/batt.png',

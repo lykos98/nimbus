@@ -30,7 +30,7 @@ influx_headers = { "Authorization": f"Token {influx_token}",
 validFields = [
             "airTemperature", "airHumidity", "airPressure", "airCO2ppm", "airNOXppm",
             "windDirection", "windSpeed",
-            "rainQuanity",
+            "rainmm",
             "terrainTemperature", "terrainHumidity", "terrainPH", 
             "waterTemperature", "waterHumidity", "waterPH",
             "batteryV", "batteryA", "solarV", "solarA"
