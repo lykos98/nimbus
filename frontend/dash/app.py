@@ -120,7 +120,6 @@ def get_last(station, api):
                     |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") \
                     |> yield() \
             "
-    print("Nope")
     res = api.query_data_frame(org = org, query = query)
     return res
     
@@ -206,10 +205,15 @@ def update_graph(station, start_date, end_date, interval, win):
     for c in allowed_meausures:
         if c in cc:
             print(c)
-            row = idx // 2 + 1
-            col = idx % 2 + 1
-            fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='spline') 
-            fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 4})
+
+            if c == 'windDirection':
+                fig = px.scatter_polar(df, r = '_time', theta = "windDirection", color= "windSpeed",
+                                       template='plotly_white', color_continuous_scale="viridis")
+                fig.update_traces(measures_colors[c])
+            else:
+                fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='linear') 
+                fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 3})
+            #fig.update_traces(measures_colors[c], marker = {'size' : 4})
             fig.update_layout(layout[c], paper_bgcolor='rgba(0,0,0,0)', xaxis_title = 'time', font_family = "SUSE" )
             fig.update_layout(margin=dict(l=10, r=20, t=40, b=10))
             if(c == 'batteryV'):
@@ -220,6 +224,15 @@ def update_graph(station, start_date, end_date, interval, win):
                 fig.update_yaxes(range = [0,110])
             if(c == 'airPressure'):
                 fig.update_yaxes(range = [90000,110000])
+            if(c == 'windDirection'):
+                fig.update_layout(
+                        polar=dict(
+                            angularaxis=dict(
+                                direction="clockwise",  # Flips the axis rotation
+                                rotation=180,  # Rotates the axis by 180 degrees
+                            )
+                        )
+                    )
 
             figs.append(dbc.Col(html.Div(
                             dcc.Graph(
@@ -229,7 +242,7 @@ def update_graph(station, start_date, end_date, interval, win):
                                          'borderColor' : 'rgba(16, 55, 92, 0.4)',
                                          'aspectRatio' : 16 / 9,
                                          'borderWidth' : '2px',
-                                         'borderStyle' : 'solid', 
+                                         #'borderStyle' : 'solid', 
                                          'height' : '100%', 
                                          'width' : '100%', 
                                          'margin' : 'auto', 
