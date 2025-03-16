@@ -11,4 +11,5 @@ services:
       - "/etc/timezone:/etc/timezone:ro" 
     environment:
       - INFLUX_TOKEN=${INFLUX_TOKEN} 
+    restart: unless-stopped
 
