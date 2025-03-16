@@ -208,8 +208,9 @@ def update_graph(station, start_date, end_date, interval, win):
 
             if c == 'windDirection':
                 fig = px.scatter_polar(df, r = '_time', theta = "windDirection", color= "windSpeed",
-                                       template='plotly_white', color_continuous_scale="viridis")
+                                       size = 8 + df["windSpeed"], template='plotly_white', color_continuous_scale="viridis")
                 fig.update_traces(measures_colors[c])
+                fig.update_traces(marker_line=dict(width=0))
             else:
                 fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='linear') 
                 fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 3})
@@ -321,7 +322,7 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
         dbc.Tab(label = "Graphs",
                 children = [dcc.Loading(dbc.Row(id = 'gauges', className = "m-3", style = {'margin' : 'auto', 'padding' : 'auto'}), delay_show = 500, delay_hide = 500),
                             dcc.Loading(dbc.Row(id = 'graph-content', 
-                                className = 'graph-content', 
+                                                className = 'graph-content', 
                                                 style={'marginTop': '30px', 'justifyContent' : 'space-around' }), 
                                         overlay_style={"visibility":"visible", "opacity": .5, "backgroundColor": "white"}, 
                                         delay_hide = 500),
