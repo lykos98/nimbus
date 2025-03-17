@@ -189,8 +189,6 @@ def update_graph(station, start_date, end_date, interval, win):
     t_start = localize_time(t_start) 
 
     t_stop = datetime.fromisoformat(f"{end_date}T23:59:59.0000")
-    if t_stop > datetime.now():
-        t_stop = datetime.now()
     t_stop = localize_time(t_stop) 
     print(station)
 
@@ -205,6 +203,8 @@ def update_graph(station, start_date, end_date, interval, win):
 
             if c == 'windDirection':
                 sizes = np.array(df["windSpeed"].values) + 8
+                sw = np.isnan(sizes)
+                sizes[sw] = 0.
                 fig = px.scatter_polar(df, r = '_time', theta = "windDirection", color= "windSpeed",
                                        size = 8 + sizes, template='plotly_white', color_continuous_scale="viridis")
                 fig.update_traces(measures_colors[c])
