@@ -107,6 +107,7 @@ def get_df(t_start, t_end, station, win, api):
                     |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") \
                     |> yield() \
             "
+    print(query)
     res = api.query_data_frame(org = org, query = query)
     return res
 
@@ -190,6 +191,8 @@ def update_graph(station, start_date, end_date, interval, win):
     t_start = localize_time(t_start) 
 
     t_stop = datetime.fromisoformat(f"{end_date}T23:59:59.0000")
+    if t_stop > datetime.now():
+        t_stop = datetime.now()
     t_stop = localize_time(t_stop) 
     print(station)
 
@@ -201,14 +204,15 @@ def update_graph(station, start_date, end_date, interval, win):
     idx = 0
 
     figs = []
-
+    
     for c in allowed_meausures:
         if c in cc:
             print(c)
 
             if c == 'windDirection':
+                sizes = np.array(df["windSpeed"].values) + 8
                 fig = px.scatter_polar(df, r = '_time', theta = "windDirection", color= "windSpeed",
-                                       size = 8 + df["windSpeed"], template='plotly_white', color_continuous_scale="viridis")
+                                       size = 8 + sizes, template='plotly_white', color_continuous_scale="viridis")
                 fig.update_traces(measures_colors[c])
                 fig.update_traces(marker_line=dict(width=0))
             else:
