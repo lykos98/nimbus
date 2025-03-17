@@ -107,7 +107,6 @@ def get_df(t_start, t_end, station, win, api):
                     |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") \
                     |> yield() \
             "
-    print(query)
     res = api.query_data_frame(org = org, query = query)
     return res
 
@@ -130,7 +129,6 @@ def get_last(station, api):
         Input('interval-component', 'n_intervals')
         )
 def update_gauges(station, interval):
-    print(station, "hehe")
     if not (station is None):
         res = get_last(station, query_api)
 
@@ -197,12 +195,8 @@ def update_graph(station, start_date, end_date, interval, win):
     print(station)
 
     df = get_df(t_start, t_stop, station, win, query_api) 
-    print(df.columns)
-
     cc = [c for c in df.columns if c not in column_ignore]
-
     idx = 0
-
     figs = []
     
     for c in allowed_meausures:
