@@ -1,20 +1,16 @@
 import dash
-bucket = "t2"
-from dash import Dash, dash_table, html, dcc, callback, Output, Input, State
-from plotly.subplots import make_subplots
+import pytz
+import influxdb_client
+import os
 
 import plotly.express as px
-import plotly.graph_objects as go
-import pandas as pd
-import influxdb_client
 import dash_bootstrap_components as dbc
-from datetime import datetime, timedelta
-import pytz
-from utils import *
-import os, sys
 
-#rgb(235, 131, 23)
-#rgb(243, 198, 35)
+from dash import Dash, dash_table, html, dcc, callback, Output, Input
+from datetime import datetime, timedelta
+from utils import measures_names, measures_colors, measures_units
+from utils import layout, icons, allowed_meausures, column_ignore
+from queries import get_stations, get_last, get_df
 
 external_stylesheets = [
         'https://fonts.googleapis.com/css2?family=SUSE:wght@100..800&display=swap',
@@ -22,20 +18,27 @@ external_stylesheets = [
         ]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-column_ignore = ['table', 'result', '_start', '_stop', '_time', '_measurement', 'stationId', 'RSSI']
 
 tz = pytz.timezone("Europe/Rome")
 
 url = "https://influx.lykos.cc"
 org = "lykos-corp"
 token = os.environ['INFLUX_TOKEN']
+bucket = "t2"
 
 client = influxdb_client.InfluxDBClient(url = url, token = token, org = org)
 query_api = client.query_api()
 
-print(pytz.country_timezones("it"))
-t_start = str((datetime.now(pytz.timezone("Europe/Rome")) - timedelta(days = 1)).isoformat())
-t_stop  = str(datetime.now(pytz.timezone("Europe/Rome")).isoformat())
+t_start = datetime.now(pytz.timezone("Europe/Rome")) - timedelta(days = 1)
+t_stop  = datetime.now(pytz.timezone("Europe/Rome"))
+
+# ------------------------------------------------------------------------------
+# CALLBACKS
+# ------------------------------------------------------------------------------
+
+
+def localize_time(date: datetime):
+    return tz.localize(date)    
 
 @callback(
         Output('date-picker', 'start_date'),
@@ -43,47 +46,17 @@ t_stop  = str(datetime.now(pytz.timezone("Europe/Rome")).isoformat())
         Input('date-picker', 'min_date_allowed'),
         )
 def today_date(vv):
-
     end_date = (datetime.now()).date()
     start_date = (datetime.now() - timedelta(days = 2)).date()
     print(start_date, end_date)
     return start_date, end_date
-
-
-def get_query(start, stop):
-    query = f"  from(bucket:\"t2\") \
-                    |> range(start: {start}, stop: {stop}) \
-                    |> filter(fn: (r) => r._measurement == \"sensors\") \
-                    |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") \
-                    |> yield() \
-            "
-    return query 
-
-def get_stations(start,stop, api):
-    query = f" import \"influxdata/influxdb/schema\" \
-                schema.tagValues(bucket: \"t2\", tag: \"stationId\", start: {start}, stop: {stop}) \
-            "
-    res = api.query_csv(org = org, query = query)
-    stations = [r[-1] for r in res if r[-2] == '0']
-    return stations
-
-app = Dash(external_stylesheets=external_stylesheets)
-
-stations = get_stations(t_start, t_stop, query_api)
-selected_station = stations[0] 
-
-
-def localize_time(date: datetime):
-    return tz.localize(date).isoformat()
-    
-
 
 @callback(
     Output('station-id-dropdown', 'options'),
     Input('date-picker', 'start_date'),
     Input('date-picker', 'end_date'),
     )
-def test_date(start_date, end_date):
+def retrieve_station(start_date, end_date):
     t_start = datetime.fromisoformat(f"{start_date}T00:00:00.0000")
     t_start = localize_time(t_start) 
 
@@ -92,36 +65,12 @@ def test_date(start_date, end_date):
 
     print(t_start)
     print(t_stop)
-    stations = get_stations(t_start, t_stop, query_api) 
+    stations = get_stations(t_start, t_stop, query_api, org) 
     print(stations)
     return stations
 
 
-def get_df(t_start, t_end, station, win, api):
-    win_thing = windows[win]
-    query = f"  from(bucket:\"t2\") \
-                    |> range(start: {t_start}, stop: {t_end}) \
-                    |> filter(fn: (r) => r._measurement == \"sensors\") \
-                    |> filter(fn: (r) => r[\"stationId\"] == \"{station}\") \
-                    {win_thing}\
-                    |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") \
-                    |> yield() \
-            "
-    res = api.query_data_frame(org = org, query = query)
-    return res
 
-
-def get_last(station, api):
-    query = f"  from(bucket:\"t2\") \
-                    |> range(start: -1w) \
-                    |> filter(fn: (r) => r._measurement == \"sensors\") \
-                    |> filter(fn: (r) => r[\"stationId\"] == \"{station}\") \
-                    |> last() \
-                    |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") \
-                    |> yield() \
-            "
-    res = api.query_data_frame(org = org, query = query)
-    return res
     
 @callback(
         Output('gauges', 'children'),
@@ -130,12 +79,10 @@ def get_last(station, api):
         )
 def update_gauges(station, interval):
     if not (station is None):
-        res = get_last(station, query_api)
+        res = get_last(station, query_api, org)
 
         ret_children = []
         ret_children.append(html.Div([html.H2(station)]))
-
-        container = []
 
         cols = [col for col in allowed_meausures if col in res.columns]
         print(res.head())
@@ -192,83 +139,96 @@ def update_graph(station, start_date, end_date, interval, win):
     t_stop = localize_time(t_stop) 
     print(station)
 
-    df = get_df(t_start, t_stop, station, win, query_api) 
-    cc = [c for c in df.columns if c not in column_ignore]
-    idx = 0
-    figs = []
-    
-    for c in allowed_meausures:
-        if c in cc:
-            print(c)
+    if not (station is None):
+        df = get_df(t_start, t_stop, station, win, query_api, org) 
+        cc = [c for c in df.columns if c not in column_ignore]
+        idx = 0
+        figs = []
+        
+        for c in allowed_meausures:
+            if c in cc:
+                print(c)
 
-            if c == 'windDirection':
-                sizes = np.array(df["windSpeed"].values) + 8
-                sw = np.isnan(sizes)
-                sizes[sw] = 0.
-                fig = px.scatter_polar(df, r = '_time', theta = "windDirection", color= "windSpeed",
-                                       size = 8 + sizes, template='plotly_white', color_continuous_scale="viridis")
-                fig.update_traces(measures_colors[c])
-                fig.update_traces(marker_line=dict(width=0))
-            else:
-                fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='linear') 
-                fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 3})
-            #fig.update_traces(measures_colors[c], marker = {'size' : 4})
-            fig.update_layout(layout[c], paper_bgcolor='rgba(0,0,0,0)', xaxis_title = 'time', font_family = "SUSE" )
-            fig.update_layout(margin=dict(l=10, r=20, t=40, b=10))
-            if(c == 'batteryV'):
-                fig.update_yaxes(range = [0,4.5])
-            if(c == 'solarV'):
-                fig.update_yaxes(range = [0,6])
-            if(c == 'airHumidity'):
-                fig.update_yaxes(range = [0,110])
-            if(c == 'airPressure'):
-                fig.update_yaxes(range = [90000,110000])
-            if(c == 'windDirection'):
-                fig.update_layout(
-                        polar=dict(
-                            angularaxis=dict(
-                                direction="clockwise",  # Flips the axis rotation
-                                rotation=180,  # Rotates the axis by 180 degrees
+                if c == 'windDirection':
+                    sizes = np.array(df["windSpeed"].values) + 8
+                    sw = np.isnan(sizes)
+                    sizes[sw] = 0.
+                    fig = px.scatter_polar(df, r = '_time', theta = "windDirection", color= "windSpeed",
+                                           size = 8 + sizes, template='plotly_white', color_continuous_scale="viridis")
+                    fig.update_traces(measures_colors[c])
+                    fig.update_traces(marker_line=dict(width=0))
+                else:
+                    fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='linear') 
+                    fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 3})
+                #fig.update_traces(measures_colors[c], marker = {'size' : 4})
+                fig.update_layout(layout[c], paper_bgcolor='rgba(0,0,0,0)', xaxis_title = 'time', font_family = "SUSE" )
+                fig.update_layout(margin=dict(l=10, r=20, t=40, b=10))
+                fig.update_traces(
+                    hoverlabel=dict(
+                        font_family="SUSE",   # Font type
+                        namelength=-1          # Prevents trace name from appearing
+                    )
+                )
+
+                if(c == 'batteryV'):
+                    fig.update_yaxes(range = [0,4.5])
+                if(c == 'solarV'):
+                    fig.update_yaxes(range = [0,6])
+                if(c == 'airHumidity'):
+                    fig.update_yaxes(range = [0,110])
+                if(c == 'airPressure'):
+                    fig.update_yaxes(range = [90000,110000])
+                if(c == 'windDirection'):
+                    fig.update_layout(
+                            polar=dict(
+                                angularaxis=dict(
+                                    direction="clockwise",  # Flips the axis rotation
+                                    rotation=180,  # Rotates the axis by 180 degrees
+                                )
                             )
                         )
-                    )
 
-            figs.append(dbc.Col(html.Div(
-                            dcc.Graph(
-                                figure = fig,
-                                className = 'graph-figure',
-                                style = {'borderRadius' : '10px', 'backgroundColor' : 'white',
-                                         'borderColor' : 'rgba(16, 55, 92, 0.4)',
-                                         'aspectRatio' : 16 / 9,
-                                         'borderWidth' : '2px',
-                                         #'borderStyle' : 'solid', 
-                                         'height' : '100%', 
-                                         'width' : '100%', 
-                                         'margin' : 'auto', 
-                                         'padding' : 'auto',
-                                         'marginTop' : '10px',
-                                         'paddingTop' : '10px'},
+                figs.append(dbc.Col(html.Div(
+                                dcc.Graph(
+                                    figure = fig,
+                                    className = 'graph-figure',
+                                    style = {'borderRadius' : '10px', 'backgroundColor' : 'white',
+                                             'borderColor' : 'rgba(16, 55, 92, 0.4)',
+                                             'aspectRatio' : 16 / 9,
+                                             'borderWidth' : '2px',
+                                             #'borderStyle' : 'solid', 
+                                             'height' : '100%', 
+                                             'width' : '100%', 
+                                             'margin' : 'auto', 
+                                             'padding' : 'auto',
+                                             'marginTop' : '10px',
+                                             'paddingTop' : '10px'},
+                                    ),
                                 ),
-                            ),
-                            md = 6, xs = 12
+                                md = 6, xs = 12
+                            )
                         )
-                    )
-            idx += 1
+                idx += 1
 
-    if not (station is None):
         df = df.drop(columns =[c for c in df.columns if c in ["table", "result", "_start", "_stop", "_measurement", "RSSI"]])
-        #df = df.drop(columns = "result")
-    data_table = dash_table.DataTable(
-                 id="table",
-                 columns=[{"name": i, "id": i} for i in df.columns],
-                 data=df.to_dict("records"),
-                 export_format="csv",
-            )
-    
-    figs2 = [dbc.Row(figs[i:min(i+2, len(figs))], className = "mb4") for i in range(0,len(figs),2)]
-    return figs2, data_table
+        data_table = dash_table.DataTable(
+                     id="table",
+                     columns=[{"name": i, "id": i} for i in df.columns],
+                     data=df.to_dict("records"),
+                     export_format="csv",
+                )
+        
+        figs2 = [dbc.Row(figs[i:min(i+2, len(figs))], className = "mb4") for i in range(0,len(figs),2)]
+        return figs2, data_table
+    else:
+        return html.Div(), html.Div() 
+
+# ------------------------------------------------------------------------------
+# LAYOUT
+# ------------------------------------------------------------------------------
 
 # Create Dash App
+app = Dash(external_stylesheets=external_stylesheets)
 
 # Layout of the dashboard
 app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, children=[

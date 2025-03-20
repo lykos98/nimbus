@@ -86,4 +86,35 @@ body{
     }
 }
 
+.modebar {
+    margin: 20px !important; /* Increase margin */
+    border-radius: 9px !important; /* Rounded borders for the entire block */
+    background-color: rgba(255, 255, 255, 0.0) !important; /* Light gray background for the entire block */
+    padding: 5px !important; /* Add padding to unify the block */
+    display: flex !important; /* Ensure the mode bar is a single flex container */
+    align-items: center !important; /* Center buttons vertically */
+}
+
+.modebar:hover {
+    background-color: rgba(120, 120, 120, 1) !important; /* Light gray background for the entire block */
+}
+
+/* Remove gaps between modebar groups */
+.modebar-group {
+    background-color: rgba(255, 255, 255, 0.0) !important; /* Light gray background for the entire block */
+    margin: 0px !important; /* Add small spacing between buttons */
+    padding: 0px !important; /* Add small spacing between buttons */
+}
+
+/* Style the buttons */
+.modebar-btn {
+    background-color: rgba(255, 255, 255, 0.0) !important; /* Light gray background for the entire block */
+    border-radius: 9px !important; /* Rounded corners for buttons */
+    margin: 2px !important; /* Add small spacing between buttons */
+}
+
+/* Hover effect for buttons */
+.modebar-btn:hover {
+    background-color: rgba(255, 255, 255, 0.0) !important; /* Light gray background for the entire block */
+}
 

@@ -1,4 +1,5 @@
 allowed_meausures = ['airTemperature', 'airHumidity', 'airPressure', 'batteryV', 'solarV', 'windSpeed', 'windDirection']
+column_ignore = ['table', 'result', '_start', '_stop', '_time', '_measurement', 'stationId', 'RSSI']
 icons = {
         'airTemperature' : 'assets/temp.svg',
         'batteryV'       : 'assets/batt.png',
@@ -54,7 +55,7 @@ layout = {
         }
 windows = {
         "None"    : "",
-        "Hour"    : "|> aggregateWindow(every: 1h, fn: mean)",
-        "Daily"   : "|> aggregateWindow(every: 1d, fn: mean)",
-        "Weekly"  : "|> aggregateWindow(every: 1w, fn: mean)",
+        "Hour"    : "1h",
+        "Daily"   : "1d",
+        "Weekly"  : "1w",
         }
