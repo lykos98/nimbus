@@ -124,7 +124,10 @@ void print_reset_reason(esp_reset_reason_t reason)
   }
 }
 
-
+void bmp_sleep() {
+  bmp.setSampling(Adafruit_BMP280::MODE_SLEEP);
+  //write8(BMP280_REGISTER_CONTROL, 0x3C);
+}
 
 void setup() {
   //WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
@@ -136,6 +139,8 @@ void setup() {
     .rf_power_down = false,
   };
   brownout_hal_config(&cfg);
+  pinMode(GPIO_NUM_3, OUTPUT);
+  digitalWrite(GPIO_NUM_3, HIGH);
 
   Serial.begin(115200);
   delay(1000);
@@ -155,7 +160,7 @@ void setup() {
 
  
   // Check if this is a wakeup from deep sleep
-  if (reason != ESP_RST_POWERON) {
+  if (reason == ESP_RST_DEEPSLEEP) {
     // If so, print the counter
 
     Serial.print("Number of turns ");
@@ -226,7 +231,7 @@ void setup() {
   float battery_voltage = 0.; //read_avg_v(0);
   Serial.println("Read battery V");
 
-  float wind_speed = (float)anemometer_rotations * M_PI * (float)ANEMOMETER_LEN / (float)SLEEP_TIME;
+  float wind_speed = (float)anemometer_rotations * M_PI * (float)ANEMOMETER_LEN / (float)(SLEEP_TIME);
 
   float wind_angle = read_angle_as5600(Wire);
   Serial.println("Read from as5600");
@@ -257,7 +262,11 @@ void setup() {
   esp_sleep_enable_timer_wakeup(SLEEP_TIME *1000 * 1000);
   //esp_sleep_enable_timer_wakeup(30 *1000 * 1000);
 
+  digitalWrite(GPIO_NUM_3, LOW);
+  //aht.sleep();
+  bmp.setSampling(Adafruit_BMP280::MODE_SLEEP);
   esp_deep_sleep_start();
+  
 
  
 }
