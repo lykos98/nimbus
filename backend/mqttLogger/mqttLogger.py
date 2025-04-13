@@ -8,8 +8,6 @@ from datetime import datetime
 from dotenv import dotenv_values
 d = dict()
 
-
-
 path = os.path.dirname(__file__) 
 
 secrets = dotenv_values(os.path.join(path,"../../.env"))
@@ -84,18 +82,17 @@ def on_message(client, userdata, msg):
     if not ("stationId" in data.keys()):
         return
 
-    writeLogs(f"Recieved -> {data}", "l")
-    stationId = data["stationId"]
 
    # writeToInflux(data)
-    try:
-        writeToInflux(data)
-    except:
-        writeLogs("Error writing to database", "m")
-        return
+    if "error" in data.keys():
+        writeLogs(f" !!! ERROR !!!: Recieved -> {data}", "l")
+    else:
+        try:
+            writeToInflux(data)
+        except:
+            writeLogs("Error writing to database", "l")
 
-    now = datetime.now()
-
+    return
 
 mqtt_client = Client("python_logger", clean_session=False)
 #mqtt_client.connect("127.0.0.1", keepalive=20)
