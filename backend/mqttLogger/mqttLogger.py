@@ -1,25 +1,28 @@
 #!/bin/python3
-import csv
 import os
-from paho.mqtt.client import Client
 import json
-import requests
+
 from datetime import datetime
-from dotenv import dotenv_values
-d = dict()
+from paho.mqtt.client import Client
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 path = os.path.dirname(__file__) 
 
-secrets = dotenv_values(os.path.join(path,"../../.env"))
-
 black_list = ["esp_lora_dummy"]
 
-influx_org = secrets["influx_org"]
-influx_bucket = secrets["influx_bucket"]
-influx_baseUrl = secrets["influx_baseUrl"]
-influx_token = secrets["influx_token"]
+influx_org     = os.environ["INFLUX_ORG"]
+influx_bucket  = os.environ["INFLUX_BUCKET"]
+influx_url     = os.environ["INFLUX_BASEURL"] 
+influx_token   = os.environ["INFLUX_TOKEN_LOGGER"]
 
-influx_url = f"{influx_baseUrl}/api/v2/write?org={influx_org}&bucket={influx_bucket}&precision=s" 
+broker_url     = os.environ["BROKER_URL"]
+broker_user    = os.environ["BROKER_USER"]
+broker_pswd    = os.environ["BROKER_PSWD"]
+broker_port    = int(os.environ["BROKER_PORT"])
+
+client = InfluxDBClient(url=influx_url, token=influx_token, org=influx_org)
+write_api = client.write_api(write_options=SYNCHRONOUS)
 
 influx_headers = { "Authorization": f"Token {influx_token}",
             "Content-Type": "text/plain; charset=utf-8",
@@ -36,26 +39,24 @@ validFields = [
 
 
 
-def writeToInflux(dataJSON):
-    databinary = f"sensors,stationId={dataJSON['stationId']} "
-    for k in dataJSON.keys(): 
+def write_to_influx(data_json):
+    point = Point("sensors")
+    point.tag("stationId", data_json['stationId'])
+    for k in data_json.keys(): 
         if k != "stationId":
-            databinary += f"{k}={dataJSON[k]},"
-    databinary = databinary[:-1]
-    databinary += f" {datetime.now().timestamp():.0f}"
-    print(databinary)
-    if dataJSON["stationId"] not in black_list:
-        try:
-            r = requests.post(influx_url, data=databinary, headers=influx_headers)
-            print(r.status_code)
-        except:
-            print("Cannot write to influx")
+            point.field(k, float(data_json[k]))
+
+    point.time(datetime.now())
+    print(point)
+    if data_json["stationId"] not in black_list:
+        write_api.write(bucket=influx_bucket, org=influx_org, record=point)
     else:
-        writeLogs("Station blacklisted")
+        write_logs("Station blacklisted")
 
 
-def writeLogs(msg, opt="l"):
-    with open(os.path.join(path,"msg.log"), "a") as f:
+def write_logs(msg, opt="l"):
+    print(path)
+    with open(os.path.join(path,"logs","msg.log"), "a") as f:
         if opt == "l":
             f.write(f"LOG {datetime.now()}: {msg}\n")
             print(f"LOG {datetime.now()}: {msg}\n")
@@ -68,36 +69,36 @@ def on_message(client, userdata, msg):
     # standar interface to library
     try:
         d = msg.payload.decode()
+        write_logs(f"Recieved -> {d}", "l")
     except:
-        writeLogs("Cannot decode string")
+        write_logs("Cannot decode string")
     try:
         data = json.loads(d)
     except:
-        try:
-            writeLogs(f"Error loading json got: {d}", "m")
-        except:
-            writeLogs("Cannot decode string")
-        return
+        write_logs(f"Error loading json got: {d}", "m")
 
     if not ("stationId" in data.keys()):
         return
 
 
-   # writeToInflux(data)
     if "error" in data.keys():
-        writeLogs(f" !!! ERROR !!!: Recieved -> {data}", "l")
+        write_logs(f" !!! ERROR !!!: Recieved -> {data}", "l")
     else:
         try:
-            writeToInflux(data)
+            write_to_influx(data)
         except:
-            writeLogs("Error writing to database", "l")
+            write_logs("Error writing to database", "l")
 
     return
 
-mqtt_client = Client("python_logger", clean_session=False)
-#mqtt_client.connect("127.0.0.1", keepalive=20)
-mqtt_client.username_pw_set(secrets["loggerUser"], secrets["loggerPassword"])
-mqtt_client.connect(secrets["broker_ip"], keepalive=20)
-mqtt_client.subscribe("esp32/sensors", qos=1)
-mqtt_client.on_message = on_message
-mqtt_client.loop_forever()
+if __name__ == "__main__":
+
+    print("Got certificate from authority")
+    print("Connecting to:")
+    print(f"broker: {broker_url} port: {broker_port}")
+    mqtt_client = Client()
+    mqtt_client.username_pw_set(broker_user, broker_pswd)
+    mqtt_client.connect(broker_url, broker_port, keepalive=20)
+    mqtt_client.subscribe("esp32/sensors", qos=1)
+    mqtt_client.on_message = on_message
+    mqtt_client.loop_forever()

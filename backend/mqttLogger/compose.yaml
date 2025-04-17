@@ -1,0 +1,21 @@
+services:
+  logger:
+    build: .
+    image: logger:latest
+    container_name: logger
+
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro" 
+      - "/etc/timezone:/etc/timezone:ro" 
+      - "./logs:/usr/local/app/logs"
+    environment:
+      - INFLUX_TOKEN=${INFLUX_TOKEN} 
+      - INFLUX_ORG=${INFLUX_ORG} 
+      - INFLUX_BUCKET=${INFLUX_BUCKET} 
+      - INFLUX_BASEURL=${INFLUX_BASEURL} 
+      - INFLUX_TOKEN_LOGGER=${INFLUX_TOKEN_LOGGER} 
+      - BROKER_URL=${BROKER_URL}
+      - BROKER_USER=${BROKER_USER}
+      - BROKER_PSWD=${BROKER_PSWD}
+      - BROKER_PORT=${BROKER_PORT}
+    restart: unless-stopped
