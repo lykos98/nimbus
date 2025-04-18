@@ -1,4 +1,5 @@
 from utils import windows
+from datetime import datetime, timedelta
 
 def get_stations(start, stop, api, org):
     params = {"start": start, "stop": stop}
@@ -36,9 +37,11 @@ def get_df(t_start, t_end, station, win, api, org):
 
 
 def get_last(station, api, org):
-    params = {"station": station}
+    params = {"station": station,
+              "t_start": datetime.now() + timedelta(hours=-1),
+              "t_stop" : datetime.now()}
     query = '''  from(bucket:"t2") 
-                    |> range(start: -1w)
+                    |> range(start: t_start, stop: t_stop)
                     |> filter(fn: (r) => r._measurement == "sensors")
                     |> filter(fn: (r) => r["stationId"] == station)
                     |> last()

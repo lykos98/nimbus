@@ -133,10 +133,10 @@ def update_gauges(station, interval):
 def update_graph(station, start_date, end_date, interval, win):
     import numpy as np
     t_start = datetime.fromisoformat(f"{start_date}T00:00:00.0000")
-    t_start = localize_time(t_start) 
+    #t_start = localize_time(t_start) 
 
     t_stop = datetime.fromisoformat(f"{end_date}T23:59:59.0000")
-    t_stop = localize_time(t_stop) 
+    #t_stop = localize_time(t_stop) 
     print(station)
 
     if not (station is None):
