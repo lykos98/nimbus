@@ -150,16 +150,17 @@ def update_graph(station, start_date, end_date, interval, win):
                 print(c)
 
                 if c == 'windDirection':
-                    sizes = np.array(df["windSpeed"].values) + 8
+                    sizes = 2 + 2 * np.array(df["windSpeed"].values)
                     sw = np.isnan(sizes)
                     sizes[sw] = 0.
                     fig = px.scatter_polar(df, r = '_time', theta = "windDirection", color= "windSpeed",
-                                           size = 8 + sizes, template='plotly_white', color_continuous_scale="viridis")
+                                           size = sizes, template='plotly_white', color_continuous_scale="viridis")
                     fig.update_traces(measures_colors[c])
                     fig.update_traces(marker_line=dict(width=0))
                 else:
                     fig = px.line(df, x='_time', y=c, template='plotly_white', markers=True, line_shape='linear') 
                     fig.update_traces(measures_colors[c], fill = 'tonexty', marker = {'size' : 3})
+
                 #fig.update_traces(measures_colors[c], marker = {'size' : 4})
                 fig.update_layout(layout[c], paper_bgcolor='rgba(0,0,0,0)', xaxis_title = 'time', font_family = "SUSE" )
                 fig.update_layout(margin=dict(l=10, r=20, t=40, b=10))
@@ -184,9 +185,15 @@ def update_graph(station, start_date, end_date, interval, win):
                                 angularaxis=dict(
                                     direction="clockwise",  # Flips the axis rotation
                                     rotation=180,  # Rotates the axis by 180 degrees
+                                    tickmode='array',
+                                    tickvals=[i for i in range(0,360,45)],
+                                    ticktext=['W', 'NW', 'N', 'NE', 'E', 'SE', 'S', 'SW']
                                 )
                             )
                         )
+                fig.update_layout(
+                    margin=dict(b=20)
+                )
 
                 figs.append(dbc.Col(html.Div(
                                 dcc.Graph(
