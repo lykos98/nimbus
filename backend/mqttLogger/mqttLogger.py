@@ -43,7 +43,7 @@ def write_to_influx(data_json):
     point = Point("sensors")
     point.tag("stationId", data_json['stationId'])
     for k in data_json.keys(): 
-        if k != "stationId":
+        if k != "stationId" and k in validFields:
             point.field(k, float(data_json[k]))
 
     point.time(datetime.now())
