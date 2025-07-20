@@ -11,19 +11,33 @@
 #include <DNSServer.h> 
 #include <ArduinoMqttClient.h>
 #include <Wire.h>
-#define RESET_PIN GPIO_NUM_4
 
-#define SCL_PIN GPIO_NUM_8
-#define SDA_PIN GPIO_NUM_9
-#define AS5600_SCL_PIN GPIO_NUM_8
-#define AS5600_SDA_PIN GPIO_NUM_9
+#ifndef RESET_PIN
+  #define RESET_PIN GPIO_NUM_4
+#endif
+
+#ifndef SCL_PIN
+  #define SCL_PIN GPIO_NUM_9
+#endif
+
+#ifndef SDA_PIN
+  #define SDA_PIN GPIO_NUM_8
+#endif
+
 #define AS5600_ADDRESS 0x36 // I2C address of the AS5600
+                            
+#define LOG_BUFFER_SIZE 512
+#define LOGF(fmt, ...) do { \
+    char _log_buf[LOG_BUFFER_SIZE]; \
+    snprintf(_log_buf, LOG_BUFFER_SIZE, fmt, ##__VA_ARGS__); \
+    Serial.printf("[%-8lu] %s\n", (unsigned long)millis(), _log_buf); \
+} while (0)
 //#define DEBUG
 
 int read_angle_as5600_raw()
 {
   Wire.end();
-  Wire.begin(AS5600_SDA_PIN, AS5600_SCL_PIN);
+  Wire.begin(SDA_PIN, SCL_PIN);
 
   auto& w = Wire;
   w.beginTransmission(AS5600_ADDRESS);
@@ -44,15 +58,11 @@ int read_angle_as5600_raw()
 
     // Convert angle to degrees (0-360)
     angleDegrees = (float)angle / 4096.0 * 360.0;
-
-    //Serial.print("Angle: ");
-    //Serial.print(angleDegrees);
-    //Serial.println(" degrees");
   }
   return angle;
 }
 
-
+/* ---- CERTIFICATE RETRIVAL AND BROKER CONFIGURATION ---- */
 
 const char* hash_url = "https://cert.lykos.cc/ca-cert-hash"; // URL for hash endpoint
 const char* cert_url = "https://cert.lykos.cc/ca-cert";      // URL for full certificate
@@ -78,28 +88,28 @@ void print_status()
   switch (WiFi.status()) 
     {
       case WL_CONNECTED:
-        Serial.println("WL_CONNECTED");
+        LOGF("WL_CONNECTED");
         break;
       case WL_NO_SHIELD:
-        Serial.println("WL_NO_SHIELD");
+        LOGF("WL_NO_SHIELD");
         break;
       case WL_IDLE_STATUS:
-        Serial.println("WL_IDLE_STATUS");
+        LOGF("WL_IDLE_STATUS");
         break;
       case WL_NO_SSID_AVAIL:
-        Serial.println("WL_NO_SSID_AVAIL");
+        LOGF("WL_NO_SSID_AVAIL");
         break;
       case WL_CONNECT_FAILED:
-        Serial.println("WL_CONNECT_FAILED");
+        LOGF("WL_CONNECT_FAILED");
         break;
       case WL_SCAN_COMPLETED:
-        Serial.println("WL_SCAN_COMPLETED");
+        LOGF("WL_SCAN_COMPLETED");
         break;
       case WL_CONNECTION_LOST:
-        Serial.println("WL_CONNECTION_LOST");
+        LOGF("WL_CONNECTION_LOST");
         break;
       case WL_DISCONNECTED:
-        Serial.println("WL_DISCONNECTED");
+        LOGF("WL_DISCONNECTED");
         break;
       default:
         break;
@@ -115,8 +125,7 @@ void retrieve_and_store_certificate(String new_cert_hash)
 
     if (http_code == 200) {
         String certData = http.getString();  // Get the full certificate
-        Serial.println("Certificate retrieved from server:");
-        Serial.println(certData);
+        LOGF("Certificate retrieved from server: %s", certData.c_str());
 
         // Store the new certificate and its hash in flash memory
         preferences.begin("cert-storage", false);
@@ -124,11 +133,11 @@ void retrieve_and_store_certificate(String new_cert_hash)
         preferences.putString("ca-cert-hash", new_cert_hash);  // Update the stored hash
         preferences.end();
 
-        Serial.println("Stored certificate and hash updated.");
+        LOGF("Stored certificate and hash updated.");
     } 
     else 
     {
-        Serial.printf("Failed to retrieve certificate, HTTP code: %d\n", http_code);
+        LOGF("Failed to retrieve certificate, HTTP code: %d", http_code);
     }
 }
 
@@ -142,18 +151,17 @@ void check_certificate()
     if (http_code == 200) 
     {
         String new_cert_hash = http.getString();  // Get the hash from server
-        Serial.println(new_cert_hash);
-        Serial.println("Hash retrieved from server:");
-        Serial.println(new_cert_hash);
+        LOGF("Hash retrieved from server: %s", new_cert_hash.c_str());
+
 
         // Retrieve the stored hash from flash memory
         preferences.begin("cert-storage", false);
         String stored_cert_hash = preferences.getString("ca-cert-hash", "");
 
         if (stored_cert_hash == new_cert_hash) {
-            Serial.println("Certificate hash matches the stored version.");
+            LOGF("Certificate hash matches the stored version.");
         } else {
-            Serial.println("Certificate hash has changed!");
+            LOGF("Certificate hash has changed!");
             // Step 2: Retrieve the full certificate since the hash is different
             retrieve_and_store_certificate(new_cert_hash);
         }
@@ -162,7 +170,7 @@ void check_certificate()
     } 
     else 
     {
-        Serial.printf("Failed to retrieve certificate hash, HTTP code: %d\n", http_code);
+        LOGF("Failed to retrieve certificate hash, HTTP code: %d", http_code);
     }
     http.end();
 }
@@ -175,19 +183,17 @@ String load_certificate() {
     preferences.end();  // Close preferences to free memory
 
     if (stored_cert.length() > 0) {
-        Serial.println("Certificate loaded from preferences:");
-        //Serial.println(stored_cert);
+        LOGF("Certificate loaded from preferences:");
+        //LOGF(stored_cert);
     } else {
-        Serial.println("No certificate found in preferences.");
+        LOGF("No certificate found in preferences.");
     }
 
     return stored_cert;
 }
 
 
-/* -------------------------------* 
-| AUTO CONFIG for ssid and psswd  |
-* --------------------------------*/
+/* ---- AUTO CONFIG for ssid and psswd ---- */
 
 
 String ssid, password, station_id;
@@ -207,23 +213,25 @@ void handle_save_config()
       preferences.putString("password", password);
       preferences.putString("station_id", station_id);
       preferences.end();
-      server.send(200, "text/html", R"rawliteral(<html>
-                                                  <head>
-                                                    <style>
-                                                      body { font-family: Arial, sans-serif; background: #f4f4f4; text-align: center; margin: 50px; }
-                                                      .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: inline-block; }
-                                                      h1 { color: #333; }
-                                                      h2 { color: #007bff; font-size: 24px; }
-                                                      button { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; transition: 0.3s; }
-                                                      button:hover { background: #0056b3; }
-                                                      input { width: 80%; padding: 10px; margin: 10px; border: 1px solid #ccc; border-radius: 5px; }
-                                                    </style>
-                                                  </head>
-                                                  <body style="width:100vw; height:100vh; padding:auto">
-                                                      <div style="margin:auto; width:fit-content">
-                                                          <h1> Config saved, reboot the board using the reset button </h1>
-                                                  </body>
-                                              </html>)rawliteral");
+      server.send(200, "text/html", 
+              R"rawliteral(
+      <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; background: #f4f4f4; text-align: center; margin: 50px; }
+              .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: inline-block; }
+              h1 { color: #333; }
+              h2 { color: #007bff; font-size: 24px; }
+              button { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; transition: 0.3s; }
+              button:hover { background: #0056b3; }
+              input { width: 80%; padding: 10px; margin: 10px; border: 1px solid #ccc; border-radius: 5px; }
+            </style>
+          </head>
+          <body style="width:100vw; height:100vh; padding:auto">
+              <div style="margin:auto; width:fit-content">
+                  <h1> Config saved, reboot the board using the reset button </h1>
+          </body>
+      </html>)rawliteral");
     }
     else {
       server.send(200, "text/html", "<h1>Cannot save preferences, malformed strings</h1>");
@@ -244,23 +252,20 @@ void handle_save_calibration()
     auto size = preferences.putInt("vane_cal", angle);
     preferences.end();
 
-    Serial.print("Writin vane calibration ");
-    Serial.print(size);
-    Serial.print(" ");
-    Serial.println(angle);
+    LOGF("Writing vane calibration %d", angle);
     server.send(200, "text/plain", "nope");
 }
 
 
 
 void start_config_portal() {
-  Serial.println("Starting configuration portal...");
+  LOGF("Starting configuration portal...");
   WiFi.mode(WIFI_AP);
   WiFi.softAP("nimbus_config");
 
   IPAddress IP = WiFi.softAPIP();
-  Serial.print("AP IP address: ");
-  Serial.println(IP);
+  LOGF("AP IP address: %s",String(IP).c_str());
+  
   dns_server.start(DNS_PORT, "*", IP);
 
   server.on("/", HTTP_GET, []() {
@@ -335,7 +340,7 @@ void start_config_portal() {
 void check_reset_condition() {
   pinMode(RESET_PIN, INPUT_PULLUP);
   if (digitalRead(RESET_PIN) == LOW) {
-    Serial.println("Resetting WiFi credentials...");
+    LOGF("Resetting WiFi credentials...");
     preferences.begin("wifi-config", false);  // Open preferences in read-write mode
     preferences.clear();  // Clear all keys in "wifi-config" namespace
     preferences.end();
@@ -372,59 +377,61 @@ void connect_to_wifi() {
   if(ssid.length() == 0 || password.length() == 0) start_config_portal();
   WiFi.begin(ssid.c_str(), password.c_str());
 
-  Serial.print("Connecting to WiFi...");
+  LOGF("Connecting to WiFi...");
   unsigned long start_attempt_time = millis();
 
   while (WiFi.status() != WL_CONNECTED && millis() - start_attempt_time < 60000) {
     delay(1000);
-    Serial.print(WiFi.status());
+    LOGF("%s", String(WiFi.status()).c_str());
     print_status();
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println(" Failed!");
+    LOGF(" Failed!");
     esp_sleep_enable_timer_wakeup(5 * 1000000);
     esp_deep_sleep_start();
   } else {
-    Serial.println(" Connected!");
+    LOGF(" Connected!");
   }
 }
 
 void connect_to_broker(MqttClient& mqttClient, const char* broker, const int port) {
 
-  #define MAX_N_TRIES 50
+  #define MAX_N_TRIES 10
   
-  #ifdef DEBUG
-    Serial.print("Attempting to connect to the MQTT broker: ");
-    Serial.println(broker);
-  #endif
-
-  int try_count = 0;
-  Serial.print("Connecting to broker...");
+  LOGF("Attempting to connect to the MQTT broker: %s", broker);
   unsigned long start_attempt_time = millis();
 
+  int try_count = 0;
   while (!mqttClient.connect(broker, port) && try_count < MAX_N_TRIES) {
     delay(500);
     #ifdef DEBUG
-      Serial.print("MQTT connection failed! Error code = ");
-      Serial.println(mqttClient.connectError());
     #endif
     delay(500);
-    blink_n_times(3);
     try_count++;
   }
 
   if (try_count == MAX_N_TRIES) {
-    Serial.println(" Failed!");
+    LOGF("MQTT connection failed! Error code = %d", mqttClient.connectError());
     esp_sleep_enable_timer_wakeup(5 * 1000000);
     esp_deep_sleep_start();
   } else {
-    Serial.println(" Connected!");
+    LOGF("Broker Connected!");
   }
 }
 
+/* ---- Utility for reading accureately voltage ---- */
+
 float read_avg_v(int pin)
 {
+  /** 
+   * this function accounts for a small ammount of calibration between 
+   * read values and actual voltage into the pin it works under the 
+   * assumption the voltmeter is a resistance in parallel
+   * w.r.t the voltage measured, change R_INTERNAL_CALIBRATION to 
+   * modify the internal resistance calibration. By default takes 
+   * N_SAMPLES_ADC samples for each measurement and averages them
+   **/
   #define N_SAMPLES_ADC 100
   #define R_VDIVIDER 68.1
   #define R_INTERNAL_CALIBRATION 535.917

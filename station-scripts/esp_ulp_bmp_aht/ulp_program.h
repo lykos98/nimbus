@@ -7,8 +7,11 @@
 #include "soc/rtc_io_reg.h"
 #include "soc/soc_ulp.h"
 
-#define GPIO_SENSOR_PIN GPIO_NUM_12
-#define RTC_GPIO_IDX rtc_io_number_get(GPIO_SENSOR_PIN)
+#ifndef ANEMOMETER_PIN
+  #define ANEMOMETER_PIN GPIO_NUM_7
+#endif
+
+#define RTC_GPIO_IDX rtc_io_number_get(ANEMOMETER_PIN)
 
 // Define the ULP counter variable in RTC memory
 
@@ -122,6 +125,7 @@ const ulp_insn_t ulp_program_d[] = {
 const ulp_insn_t ulp_program_e[] = {
   //init state 
   // read state
+  M_LABEL(1),
   I_RD_REG( RTC_GPIO_IN_REG, 
           RTC_GPIO_IN_NEXT_S + RTC_GPIO_IDX, 
           RTC_GPIO_IN_NEXT_S + RTC_GPIO_IDX),
@@ -130,26 +134,43 @@ const ulp_insn_t ulp_program_e[] = {
   
    
   I_MOVI(R2, OLD_STATE),
-  I_MOVI(R1,1),
-  I_SUBR(R1,R1,R0),
+  // old state
+  I_LD(R1, R2, 0),
 
+  I_SUBR(R1, R1, R0),
+  M_BXZ(0),
+  I_ST(R0, R2, 0),
+  I_MOVI(R2, COUNTER),
+  I_LD(R0, R2, 0),
+  I_ADDI(R0, R0, 1),
   I_ST(R0,R2,0),
+  I_HALT(),
 
-
+  M_LABEL(0),
+  I_HALT()
+  
 };
+
 // Function to start the ULP program
-void startULP() {
+esp_err_t startULP() {
 
   // Load ULP program
+  esp_err_t err = 1;
+  size_t size = sizeof(ulp_program_d) / sizeof(ulp_insn_t);
+  int tries = 0;
+  while(err != ESP_OK && tries < 10)
+  {
+    err = ulp_process_macros_and_load(PROGRAM_OFFSET, ulp_program_d, &size);
+    //LOGF(err);
+    // Set ULP wake-up period (e.g., every 1000ms)
+
+    err = ulp_set_wakeup_period(0, 1); // Wake up every fine
+
+    // Start the ULP program
+    err = ulp_run(PROGRAM_OFFSET);
+    tries++;
+    delay(100);
+  }
   
-  size_t size = sizeof(ulp_program) / sizeof(ulp_insn_t);
-  auto err = ulp_process_macros_and_load(PROGRAM_OFFSET, ulp_program, &size);
-  //Serial.println(err);
-  // Set ULP wake-up period (e.g., every 1000ms)
-
-  //ulp_set_wakeup_period(0, 1); // Wake up every second
-
-  // Start the ULP program
-  ulp_run(PROGRAM_OFFSET);
-
+  return err;
 }
