@@ -1,0 +1,5 @@
+Flask
+gunicorn
+influxdb_client
+pandas
+

@@ -1,16 +1,16 @@
 import dash
 import pytz
-import influxdb_client
+import requests
 import os
 
 import plotly.express as px
 import dash_bootstrap_components as dbc
+import pandas as pd
 
 from dash import Dash, dash_table, html, dcc, callback, Output, Input
 from datetime import datetime, timedelta
 from utils import measures_names, measures_colors, measures_units
 from utils import layout, icons, allowed_meausures, column_ignore
-from queries import get_stations, get_last, get_df
 
 external_stylesheets = [
         'https://fonts.googleapis.com/css2?family=SUSE:wght@100..800&display=swap',
@@ -21,13 +21,7 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 tz = pytz.timezone("Europe/Rome")
 
-url = "https://influx.lykos.cc"
-org = "lykos-corp"
-token = os.environ['INFLUX_TOKEN']
-bucket = "t2"
-
-client = influxdb_client.InfluxDBClient(url = url, token = token, org = org)
-query_api = client.query_api()
+API_URL = os.getenv("API_URL")
 
 t_start = datetime.now(pytz.timezone("Europe/Rome")) - timedelta(days = 1)
 t_stop  = datetime.now(pytz.timezone("Europe/Rome"))
@@ -48,7 +42,7 @@ def localize_time(date: datetime):
 def today_date(vv):
     end_date = (datetime.now()).date()
     start_date = (datetime.now() - timedelta(days = 2)).date()
-    print(start_date, end_date)
+    
     return start_date, end_date
 
 @callback(
@@ -65,7 +59,8 @@ def retrieve_station(start_date, end_date):
 
     print(t_start)
     print(t_stop)
-    stations = get_stations(t_start, t_stop, query_api, org) 
+    req = requests.get(f"{API_URL}/api/stations")
+    stations = req.json()
     print(stations)
     return stations
 
@@ -79,7 +74,9 @@ def retrieve_station(start_date, end_date):
         )
 def update_gauges(station, interval):
     if not (station is None):
-        res = get_last(station, query_api, org)
+
+        req = requests.get(f"{API_URL}/api/stations/{station}/last")
+        res = pd.DataFrame.from_dict(req.json())
 
         ret_children = []
         ret_children.append(html.Div([html.H2(station)]))
@@ -112,6 +109,7 @@ def update_gauges(station, interval):
                                                  ), style = {'margin' : 'auto'}
                                         ))
 
+        res["_time"] = pd.to_datetime(res["_time"], unit="ms", utc="true")
         dt = str((res["_time"].values[0])).split("T")
         date = dt[0]
         time = dt[1].split(".")[0]
@@ -140,7 +138,14 @@ def update_graph(station, start_date, end_date, interval, win):
     print(station)
 
     if not (station is None):
-        df = get_df(t_start, t_stop, station, win, query_api, org) 
+        try:
+            res = requests.get(f"{API_URL}/api/stations/{station}/data?start={t_start}&stop={t_stop}&win={win}")
+            df = pd.DataFrame.from_dict(res.json()) 
+            df["_time"] = pd.to_datetime(df["_time"], unit="ms", utc="true")
+
+        except:
+            return html.Div("Cannot perform query"), html.Div() 
+            
         cc = [c for c in df.columns if c not in column_ignore]
         idx = 0
         figs = []
@@ -309,4 +314,4 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
 # You can add callbacks here for the date picker and station dropdown interactivity.
 server = app.server
 if __name__ == '__main__':
-    app.run_server(debug=True, host="0.0.0.0")
+    app.run(debug=True, host="0.0.0.0")
