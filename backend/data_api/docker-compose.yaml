@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  data-api:
+    build:
+      context: .  # Use the current directory for the Dockerfile
+    ports:
+      - "5555:5555"  # Map container's port 5000 to host's port 5000
+    environment:
+      - INFLUX_TOKEN=${INFLUX_TOKEN} 
+      - INFLUX_ORG=${INFLUX_ORG} 
+      - INFLUX_BUCKET=${INFLUX_BUCKET} 
+      - INFLUX_BASEURL=${INFLUX_BASEURL} 
+
+    restart: unless-stopped  # Restart policy to ensure service stays up
