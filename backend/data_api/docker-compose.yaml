@@ -6,6 +6,9 @@ services:
       context: .  # Use the current directory for the Dockerfile
     ports:
       - "5555:5555"  # Map container's port 5000 to host's port 5000
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro" 
+      - "/etc/timezone:/etc/timezone:ro" 
     environment:
       - INFLUX_TOKEN=${INFLUX_TOKEN} 
       - INFLUX_ORG=${INFLUX_ORG} 
