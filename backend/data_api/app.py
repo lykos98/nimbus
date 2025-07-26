@@ -59,68 +59,74 @@ def get_stations():
 
 @app.route('/api/stations/<string:station>/data', methods=['GET'])
 def get_df(station: str):
-    start = request.args.get('start')
-    stop  = request.args.get('stop')
-    #station = request.args.get('station')
+    try: 
+        start = request.args.get('start')
+        stop  = request.args.get('stop')
+        #station = request.args.get('station')
 
-    start = datetime.fromisoformat(start)
-    stop  = datetime.fromisoformat(stop)
+        start = datetime.fromisoformat(start)
+        stop  = datetime.fromisoformat(stop)
 
-    if "win" not in request.args:
-        win = "None"
-    else:
-        win = request.args.get('win')
+        if "win" not in request.args:
+            win = "None"
+        else:
+            win = request.args.get('win')
 
-    client = get_influx_db_client()
-    api = client.query_api()
+        client = get_influx_db_client()
+        api = client.query_api()
 
-    win_selector = windows[win]
+        win_selector = windows[win]
 
-    params = {"t_start": start, "t_stop": stop, "station": station,
-              "win_selector": win_selector}
-    if win == "None":
-        query = '''  from(bucket:"t2") 
-                        |> range(start: t_start, stop: t_stop)
-                        |> filter(fn: (r) => r._measurement == "sensors") 
-                        |> filter(fn: (r) => r["stationId"] == station) 
-                        |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value") 
-                        |> yield() 
-                ''' 
-    else:
-        query = '''  from(bucket:"t2") 
-                        |> range(start: t_start, stop: t_stop)
-                        |> filter(fn: (r) => r._measurement == "sensors") 
-                        |> filter(fn: (r) => r["stationId"] == station) 
-                        |> aggregateWindow(every: duration(v: win_selector), fn: mean, createEmpty: false)
-                        |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value") 
-                        |> yield() 
-                ''' 
-    res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params )
+        params = {"t_start": start, "t_stop": stop, "station": station,
+                "win_selector": win_selector}
+        if win == "None":
+            query = '''  from(bucket:"t2") 
+                            |> range(start: t_start, stop: t_stop)
+                            |> filter(fn: (r) => r._measurement == "sensors") 
+                            |> filter(fn: (r) => r["stationId"] == station) 
+                            |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value") 
+                            |> yield() 
+                    ''' 
+        else:
+            query = '''  from(bucket:"t2") 
+                            |> range(start: t_start, stop: t_stop)
+                            |> filter(fn: (r) => r._measurement == "sensors") 
+                            |> filter(fn: (r) => r["stationId"] == station) 
+                            |> aggregateWindow(every: duration(v: win_selector), fn: mean, createEmpty: false)
+                            |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value") 
+                            |> yield() 
+                    ''' 
+        res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params )
 
-    return res.to_json()
+        return res.to_json()
+    except:
+        return 400, "Cannot perform query"
 
 
 
 @app.route('/api/stations/<string:station>/last', methods=['GET'])
 def get_last(station):
-    params = {"station": station,
-              "t_start": datetime.now() + timedelta(hours=-1),
-              "t_stop" : datetime.now()}
-    query = '''  from(bucket:"t2") 
-                    |> range(start: t_start, stop: t_stop)
-                    |> filter(fn: (r) => r._measurement == "sensors")
-                    |> filter(fn: (r) => r["stationId"] == station)
-                    |> last()
-                    |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-                    |> yield()
-            '''
+    try:
+        params = {"station": station,
+                "t_start": datetime.now() + timedelta(hours=-1),
+                "t_stop" : datetime.now()}
+        query = '''  from(bucket:"t2") 
+                        |> range(start: t_start, stop: t_stop)
+                        |> filter(fn: (r) => r._measurement == "sensors")
+                        |> filter(fn: (r) => r["stationId"] == station)
+                        |> last()
+                        |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+                        |> yield()
+                '''
 
-    client = get_influx_db_client()
-    api = client.query_api()
-    res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params)
-    print(res.head())
-    print(res.to_json())
-    return res.to_json()
+        client = get_influx_db_client()
+        api = client.query_api()
+        res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params)
+        print(res.head())
+        print(res.to_json())
+        return res.to_json()
+    except:
+        return jsonify({"error" : "Cannot perform query"}), 400
 
 if __name__ == '__main__':
     app.run(debug=False, port=5555) # In production, set debug=False and use a WSGI server
