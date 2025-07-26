@@ -88,7 +88,7 @@ def get_df(station: str):
                 ''' 
     else:
         query = '''  from(bucket:"t2") 
-                        |> range(start: t_start, stop: t_end)
+                        |> range(start: t_start, stop: t_stop)
                         |> filter(fn: (r) => r._measurement == "sensors") 
                         |> filter(fn: (r) => r["stationId"] == station) 
                         |> aggregateWindow(every: duration(v: win_selector), fn: mean, createEmpty: false)
