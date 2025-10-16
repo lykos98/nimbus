@@ -72,10 +72,12 @@ def on_message(client, userdata, msg):
         write_logs(f"Recieved -> {d}", "l")
     except:
         write_logs("Cannot decode string")
+        return
     try:
         data = json.loads(d)
     except:
         write_logs(f"Error loading json got: {d}", "m")
+        return
 
     if not ("stationId" in data.keys()):
         return

@@ -9,7 +9,8 @@
 #include <Preferences.h>
 #include <WebServer.h>
 #include <DNSServer.h> 
-#include <ArduinoMqttClient.h>
+#include <PubSubClient.h>
+//#include <ArduinoMqttClient.h>
 #include <Wire.h>
 
 #ifndef RESET_PIN
@@ -74,7 +75,7 @@ WebServer server(80);  // Create a web server on port 80
 DNSServer dns_server;
 
 WiFiClientSecure wifiClient;
-MqttClient mqttClient(wifiClient);
+PubSubClient mqttClient(wifiClient);
 
 //const char broker[] = "192.168.1.117";
 const char broker[] = "lykos.cc";
@@ -264,6 +265,7 @@ void start_config_portal() {
   WiFi.softAP("nimbus_config");
 
   IPAddress IP = WiFi.softAPIP();
+  Serial.println(IP);
   LOGF("AP IP address: %s",String(IP).c_str());
   
   dns_server.start(DNS_PORT, "*", IP);
@@ -395,7 +397,8 @@ void connect_to_wifi() {
   }
 }
 
-void connect_to_broker(MqttClient& mqttClient, const char* broker, const int port) {
+/*
+void connect_to_broker(PubSubClient& mqttClient, const char* broker, const int port) {
 
   #define MAX_N_TRIES 10
   
@@ -413,6 +416,36 @@ void connect_to_broker(MqttClient& mqttClient, const char* broker, const int por
 
   if (try_count == MAX_N_TRIES) {
     LOGF("MQTT connection failed! Error code = %d", mqttClient.connectError());
+    esp_sleep_enable_timer_wakeup(5 * 1000000);
+    esp_deep_sleep_start();
+  } else {
+    LOGF("Broker Connected!");
+  }
+}
+*/
+void connect_to_broker(PubSubClient& mqttClient, const char* broker, const int port) {
+
+  #define MAX_N_TRIES 10
+
+  String ca_cert = load_certificate();
+  //mqttClient.setCACert(ca_cert.c_str());
+  mqttClient.setBufferSize(LOG_BUFFER_SIZE);
+  mqttClient.setServer(broker,port);
+  
+  LOGF("Attempting to connect to the MQTT broker: %s", broker);
+  unsigned long start_attempt_time = millis();
+
+  int try_count = 0;
+  while (!mqttClient.connect("nope") && try_count < MAX_N_TRIES) {
+    delay(500);
+    #ifdef DEBUG
+    #endif
+    delay(500);
+    try_count++;
+  }
+
+  if (try_count == MAX_N_TRIES) {
+    LOGF("MQTT connection failed! Error code = %d",0);
     esp_sleep_enable_timer_wakeup(5 * 1000000);
     esp_deep_sleep_start();
   } else {

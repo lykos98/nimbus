@@ -18,7 +18,8 @@
 enum {
   COUNTER,
   OLD_STATE,
-  PROGRAM_OFFSET,
+  ULP_ACTIVE,
+  PROGRAM_OFFSET  
 };
 
 enum {
@@ -29,7 +30,7 @@ enum {
   LABEL_DELAY_LOOP,
   LABEL_DELAY_END
 };
-
+/*
 const ulp_insn_t ulp_program[] = {
   // Load ulp_wakeup_counter address into R0
 
@@ -90,11 +91,18 @@ const ulp_insn_t ulp_program[] = {
   I_MOVR(R0,R3),
   M_BX(LABEL_DELAY_END)
 };
+*/
 
 
 const ulp_insn_t ulp_program_d[] = {
   //init state 
   // read state
+  I_MOVI(R2, ULP_ACTIVE),
+  I_MOVI(R0,117),
+  I_ST(R0,R2,0),
+
+
+
   M_LABEL(1),
   I_RD_REG( RTC_GPIO_IN_REG, 
           RTC_GPIO_IN_NEXT_S + RTC_GPIO_IDX, 
@@ -122,14 +130,32 @@ const ulp_insn_t ulp_program_d[] = {
   M_BX(1)
 };
 
+
+const ulp_insn_t ulp_program_f[] = {
+  //init state 
+  // read state
+  I_MOVI(R2, ULP_ACTIVE),
+  I_MOVI(R0,117),
+  I_ST(R0,R2,0),
+  I_HALT()
+};
+
+
+
 const ulp_insn_t ulp_program_e[] = {
   //init state 
   // read state
+  I_MOVI(R2, ULP_ACTIVE),
+  I_MOVI(R0,117),
+  I_ST(R0,R2,0),
+
+
+
   M_LABEL(1),
   I_RD_REG( RTC_GPIO_IN_REG, 
           RTC_GPIO_IN_NEXT_S + RTC_GPIO_IDX, 
           RTC_GPIO_IN_NEXT_S + RTC_GPIO_IDX),
-  I_DELAY(0xFFFF),
+  //I_DELAY(0xFFFF),
 
   
    
@@ -144,11 +170,10 @@ const ulp_insn_t ulp_program_e[] = {
   I_LD(R0, R2, 0),
   I_ADDI(R0, R0, 1),
   I_ST(R0,R2,0),
-  I_HALT(),
 
   M_LABEL(0),
   I_HALT()
-  
+
 };
 
 // Function to start the ULP program
@@ -161,10 +186,8 @@ esp_err_t startULP() {
   while(err != ESP_OK && tries < 10)
   {
     err = ulp_process_macros_and_load(PROGRAM_OFFSET, ulp_program_d, &size);
-    //LOGF(err);
-    // Set ULP wake-up period (e.g., every 1000ms)
 
-    err = ulp_set_wakeup_period(0, 1); // Wake up every fine
+    err = ulp_set_wakeup_period(0, 1000); // Wake up every fine
 
     // Start the ULP program
     err = ulp_run(PROGRAM_OFFSET);
