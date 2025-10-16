@@ -182,22 +182,6 @@ void setup() {
   check_reset_condition();
   connect_to_wifi();
 
-  /* set the direction of the pin of the anemometer */
-
-  esp_err_t gpio_config_err = -1;
-  int tries = 0;
-  while(gpio_config_err != ESP_OK || tries <= MAX_N_TRIES)
-  {
-    gpio_config_err = ESP_OK;
-    gpio_config_err = gpio_config_err || rtc_gpio_deinit(ANEMOMETER_PIN);
-    gpio_config_err = gpio_config_err || rtc_gpio_init(ANEMOMETER_PIN);
-    gpio_config_err = gpio_config_err || rtc_gpio_set_direction(ANEMOMETER_PIN, RTC_GPIO_MODE_INPUT_ONLY);
-    gpio_config_err = gpio_config_err || rtc_gpio_pulldown_dis(ANEMOMETER_PIN);     // enable the pull-up resistor
-    gpio_config_err = gpio_config_err || rtc_gpio_pullup_en(ANEMOMETER_PIN);  // disable the pull-down resistor
-    gpio_config_err = gpio_config_err || rtc_gpio_hold_en(ANEMOMETER_PIN);       // required to maintain pull-up
-    tries++;
-  }
-
   esp_err_t err;
   /* retrieve from memory the number of anemometer rotations */  
   if (reason == ESP_RST_DEEPSLEEP) {
@@ -223,13 +207,29 @@ void setup() {
 
   err = startULP();
   char ulp_err[10];
-
   if(err == ESP_OK || ulp_active == 117){
     strcpy(ulp_err,"OK");
   }
   else {
     strcpy(ulp_err,"FAIL");
   }
+  
+  /* set the direction of the pin of the anemometer */
+
+  esp_err_t gpio_config_err = -1;
+  int tries = 0;
+  while(gpio_config_err != ESP_OK || tries <= MAX_N_TRIES)
+  {
+    gpio_config_err = ESP_OK;
+    gpio_config_err = gpio_config_err || rtc_gpio_deinit(ANEMOMETER_PIN);
+    gpio_config_err = gpio_config_err || rtc_gpio_init(ANEMOMETER_PIN);
+    gpio_config_err = gpio_config_err || rtc_gpio_set_direction(ANEMOMETER_PIN, RTC_GPIO_MODE_INPUT_ONLY);
+    gpio_config_err = gpio_config_err || rtc_gpio_pulldown_dis(ANEMOMETER_PIN);     // enable the pull-up resistor
+    gpio_config_err = gpio_config_err || rtc_gpio_pullup_en(ANEMOMETER_PIN);  // disable the pull-down resistor
+    gpio_config_err = gpio_config_err || rtc_gpio_hold_en(ANEMOMETER_PIN);       // required to maintain pull-up
+    tries++;
+  }
+  
 
   
   /* retrieve certificate and connect to the mqtt broker */
