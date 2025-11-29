@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nimbus Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Nimbus Admin Dashboard</h1>
+        
+        <!-- Login Form -->
+        <div id="login-section">
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit">Login</button>
+                <div id="login-message" class="message"></div>
+            </form>
+        </div>
+
+        <!-- Dashboard Section (Hidden by default) -->
+        <div id="dashboard-section" style="display: none;">
+            <div class="dashboard-header">
+                <h2>Welcome, <span id="current-username"></span>!</h2>
+                <button id="logout-button">Logout</button>
+            </div>
+            <div id="dashboard-message" class="message"></div>
+
+            <!-- User Management (Admin Only) -->
+            <div id="user-management" class="management-section" style="display: none;">
+                <h3>User Management</h3>
+                <form id="add-user-form">
+                    <h4>Add New User</h4>
+                    <div class="form-group">
+                        <label for="new-username">Username:</label>
+                        <input type="text" id="new-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-password">Password:</label>
+                        <input type="password" id="new-password" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="checkbox" id="new-is-admin">
+                        <label for="new-is-admin">Is Admin</label>
+                    </div>
+                    <button type="submit">Add User</button>
+                    <div id="add-user-message" class="message"></div>
+                </form>
+
+                <h4>Existing Users</h4>
+                <table id="users-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Admin</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Users will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Station Management -->
+            <div id="station-management" class="management-section">
+                <h3>Station Management</h3>
+                <form id="add-station-form">
+                    <h4>Add New Station</h4>
+                    <div class="form-group">
+                        <label for="new-station-id">Station ID:</label>
+                        <input type="text" id="new-station-id" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="station-user-id">Assign to User ID:</label>
+                        <input type="number" id="station-user-id" required>
+                    </div>
+                    <button type="submit">Add Station</button>
+                    <div id="add-station-message" class="message"></div>
+                </form>
+
+                <h4>Existing Stations</h4>
+                <table id="stations-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Station ID</th>
+                            <th>Secret</th>
+                            <th>User ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Stations will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

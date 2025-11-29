@@ -2,4 +2,5 @@ Flask
 gunicorn
 influxdb_client
 pandas
-
+psycopg2-binary
+Flask-JWT-Extended

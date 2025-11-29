@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  nimbus_secrets_db:
+    build:
+      context: ./backend/secrets_db
+      dockerfile: Dockerfile
+    image: nimbus-secrets-db:latest
+    container_name: nimbus_secrets_db
+    restart: always
+    environment:
+      POSTGRES_DB: nimbus_secrets
+      POSTGRES_USER: nimbus_user
+      POSTGRES_PASSWORD: nimbus_password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - nimbus-network
+
+  data-api:
+    build:
+      context: ./backend/data_api
+      dockerfile: Dockerfile
+    image: nimbus-data-api:latest
+    container_name: nimbus_data_api
+    ports:
+      - "5555:5555"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    environment:
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INFLUX_ORG=${INFLUX_ORG}
+      - INFLUX_BUCKET=${INFLUX_BUCKET}
+      - INFLUX_BASEURL=${INFLUX_BASEURL}
+      # Database connection for secrets_db
+      - DB_HOST=nimbus_secrets_db
+      - DB_NAME=nimbus_secrets
+      - DB_USER=nimbus_user
+      - DB_PASSWORD=nimbus_password
+      - JWT_SECRET_KEY=super-secret # IMPORTANT: Change this in production!
+    depends_on:
+      - nimbus_secrets_db
+      - influxdb
+    networks:
+      - nimbus-network
+    restart: unless-stopped
+
+  admin_dashboard:
+    build:
+      context: ./frontend/admin_dashboard
+      dockerfile: Dockerfile
+    image: nimbus-admin-dashboard:latest
+    container_name: nimbus_admin_dashboard
+    ports:
+      - "80:5000" # Map host port 80 to container port 5000
+    depends_on:
+      - data-api
+    networks:
+      - nimbus-network
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:2.6-alpine
+    container_name: nimbus_influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - ${INFLUXDB_DATA_PATH:-./influxdb_data}:/var/lib/influxdb2:rw
+    networks:
+      - nimbus-network
+    restart: unless-stopped
+  
+  dash:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: nimbus-dash:latest
+    container_name: nimbus_dash
+    ports:
+      - "8050:8050"
+    environment:
+      - INFLUX_TOKEN=${INFLUX_TOKEN} 
+      - API_URL=http://data-api:5555
+    depends_on:
+      - data-api
+      - influxdb
+    networks:
+      - nimbus-network
+    restart: unless-stopped
+
+networks:
+  nimbus-network:
+    driver: bridge
+
+volumes:
+  db_data:
+  influxdb_data:
