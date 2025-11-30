@@ -1,7 +1,7 @@
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(80) UNIQUE NOT NULL,
-    password_hash VARCHAR(120) NOT NULL,
+    password_hash VARCHAR(256) NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT FALSE
 );
 
