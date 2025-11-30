@@ -10,8 +10,8 @@ services:
     restart: always
     environment:
       POSTGRES_DB: nimbus_secrets
-      POSTGRES_USER: nimbus_user
-      POSTGRES_PASSWORD: nimbus_password
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWD}
     volumes:
       - db_data:/var/lib/postgresql/data
     networks:
@@ -36,9 +36,9 @@ services:
       # Database connection for secrets_db
       - DB_HOST=nimbus_secrets_db
       - DB_NAME=nimbus_secrets
-      - DB_USER=nimbus_user
-      - DB_PASSWORD=nimbus_password
-      - JWT_SECRET_KEY=super-secret # IMPORTANT: Change this in production!
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     depends_on:
       - nimbus_secrets_db
       - influxdb
@@ -66,7 +66,7 @@ services:
     ports:
       - "8086:8086"
     volumes:
-      - ${INFLUXDB_DATA_PATH:-./influxdb_data}:/var/lib/influxdb2:rw
+      - ${INFLUX_DATA_PATH:-./influxdb_data}:/var/lib/influxdb2:rw
     networks:
       - nimbus-network
     restart: unless-stopped
@@ -81,7 +81,7 @@ services:
       - "8050:8050"
     environment:
       - INFLUX_TOKEN=${INFLUX_TOKEN} 
-      - API_URL=http://data-api:5555
+      - API_URL=${DATA_API_URL}
     depends_on:
       - data-api
       - influxdb
