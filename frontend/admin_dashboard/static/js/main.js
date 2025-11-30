@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addStationForm = document.getElementById('add-station-form');
     const stationsTableBody = document.querySelector('#stations-table tbody');
 
-    const API_URL = ''; // The UI is served from the same origin as the API
+    const API_URL = "https://hehe.lykos.cc"; // The UI is served from the same origin as the API
 
     /**
      * UTILITY FUNCTIONS
