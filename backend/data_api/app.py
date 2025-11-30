@@ -27,7 +27,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 # JWT Configuration
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") 
-jwt = JWTManager(app)
+jwt_manager = JWTManager(app)
 
 @app.before_request
 def log_jwt_info():
@@ -126,8 +126,6 @@ def get_stations():
     except:
         return jsonify({"error" : "Cannot perform query"}), 400
         
-
-# TODO: put try except
 
 @app.route('/api/stations/<string:station>/data', methods=['GET', 'POST'])
 def get_df(station: str):
