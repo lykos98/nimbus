@@ -215,7 +215,7 @@ def get_df(station: str):
             
             point.time(datetime.now())
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
-            app.logger.info(f" -> Recieved: {data_json}")
+            print(f" -> Recieved: {data_json}")
             return jsonify({"status": "success"}), 201
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
