@@ -13,7 +13,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWD}
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ${POSTGRES_DATA}:/var/lib/postgresql/data
     networks:
       - nimbus-network
 
@@ -53,7 +53,7 @@ services:
     image: nimbus-admin-dashboard:latest
     container_name: nimbus_admin_dashboard
     ports:
-      - "80:5000" # Map host port 80 to container port 5000
+      - "5080:5000" # Map host port 5080 to container port 5000
     depends_on:
       - data-api
     networks:
@@ -93,6 +93,3 @@ networks:
   nimbus-network:
     driver: bridge
 
-volumes:
-  db_data:
-  influxdb_data:
