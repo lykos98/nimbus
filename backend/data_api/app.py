@@ -3,18 +3,18 @@ from flask import Flask, request, jsonify, g
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client import Point
 import os
-import datetime # Changed from `from datetime import datetime, timedelta`
-from datetime import timedelta # Explicitly import timedelta
+import datetime 
+from datetime import timedelta, datetime 
 import psycopg2
-from psycopg2 import extras # For DictCursor
-from werkzeug.security import generate_password_hash, check_password_hash # For password hashing
-from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity # For JWT authentication
+from psycopg2 import extras 
+from werkzeug.security import generate_password_hash, check_password_hash 
+from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity 
 from utils import windows, validFields
 
 app = Flask(__name__)
 
 # InfluxDB Configuration (store securely, e.g., environment variables)
-INFLUX_URL = os.getenv("INFLUX_BASEURL", "http://influxdb:8086")
+INFLUX_URL = os.getenv("INFLUX_BASEURL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN") 
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
@@ -22,11 +22,11 @@ INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
 # PostgreSQL Configuration
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_NAME = os.getenv("DB_NAME", "nimbus_secrets")
-DB_USER = os.getenv("DB_USER", "nimbus_user")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "nimbus_password")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 # JWT Configuration
-app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "super-secret") # Change this in production!
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") 
 jwt = JWTManager(app)
 
 def get_db_connection():
@@ -96,6 +96,7 @@ def get_stations():
 
         return jsonify(stations)
     except:
+        raise
         return jsonify({"error" : "Cannot perform query"}), 400
         
 
