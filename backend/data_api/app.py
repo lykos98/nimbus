@@ -26,6 +26,11 @@ DB_NAME = os.getenv("DB_NAME", "nimbus_secrets")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
+if __name__ != '__main__':
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
+
 # JWT Configuration
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") 
 jwt_manager = JWTManager(app)
@@ -217,7 +222,7 @@ def get_df(station: str):
             point.time(datetime.now())
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
             app.logger.info(f" -> Recieved: {data_json}")
-            print(f"STDERR LOG -> Recieved: {data_json}", file=sys.stderr)
+            print(f"LOG -> Recieved: {data_json}", file=sys.stderr)
             return jsonify({"status": "success"}), 201
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
