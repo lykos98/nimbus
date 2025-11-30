@@ -3,7 +3,6 @@ from flask import Flask, request, jsonify, g
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client import Point
 import os
-import datetime 
 from datetime import timedelta, datetime 
 import psycopg2
 from psycopg2 import extras 
@@ -96,7 +95,6 @@ def get_stations():
 
         return jsonify(stations)
     except:
-        raise
         return jsonify({"error" : "Cannot perform query"}), 400
         
 
@@ -144,7 +142,7 @@ def get_df(station: str):
                         ''' 
             res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params )
 
-            return res.to_json()
+            return res.to_json(), 200
         except Exception as e:
             app.logger.error(f"Error in GET /api/stations/.../data: {e}")
             return jsonify({"error": "Cannot perform query"}), 400
@@ -181,7 +179,7 @@ def get_df(station: str):
                 if k != "stationId" and k in validFields:
                     point.field(k, float(data_json[k]))
             
-            point.time(datetime.datetime.now())
+            point.time(datetime.now())
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
             return jsonify({"status": "success"}), 201
         except Exception as e:
@@ -193,8 +191,8 @@ def get_df(station: str):
 def get_last(station):
     try:
         params = {"station": station,
-                "t_start": datetime.datetime.now() + datetime.timedelta(hours=-1),
-                "t_stop" : datetime.datetime.now()}
+                "t_start": datetime.now() + timedelta(hours=-1),
+                "t_stop" : datetime.now()}
         query = '''  from(bucket:"t2") 
                         |> range(start: t_start, stop: t_stop)
                         |> filter(fn: (r) => r._measurement == "sensors")
@@ -207,9 +205,7 @@ def get_last(station):
         client = get_influx_db_client()
         api = client.query_api()
         res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params)
-        print(res.head())
-        print(res.to_json())
-        return res.to_json()
+        return res.to_json(), 200
     except:
         return jsonify({"error" : "Cannot perform query"}), 400
 
