@@ -257,7 +257,7 @@ def admin_stations_management():
         return jsonify({"msg": "Administration access required"}), 403
 
     if request.method == "GET":
-        cur.execute("SELECT id, station_id, user_id FROM stations")
+        cur.execute("SELECT id, station_id, user_id, secret FROM stations")
         stations = cur.fetchall()
         cur.close()
         return jsonify([dict(s) for s in stations]), 200

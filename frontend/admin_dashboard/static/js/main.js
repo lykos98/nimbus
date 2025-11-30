@@ -148,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stations.forEach(station => {
                 const row = document.createElement('tr');
                 // For non-admins, the secret is not sent. Handled this in the backend already.
+                console.log(station)
                 const secret = station.secret || 'N/A (Hidden)';
                 row.innerHTML = `
                     <td>${station.id}</td>
