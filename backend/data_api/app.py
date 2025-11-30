@@ -9,6 +9,7 @@ from psycopg2 import extras
 from werkzeug.security import generate_password_hash, check_password_hash 
 from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity 
 import jwt # For decoding for logging
+import sys # For direct stderr logging
 from utils import windows, validFields
 
 app = Flask(__name__)
@@ -216,6 +217,7 @@ def get_df(station: str):
             point.time(datetime.now())
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
             app.logger.info(f" -> Recieved: {data_json}")
+            print(f"STDERR LOG -> Recieved: {data_json}", file=sys.stderr)
             return jsonify({"status": "success"}), 201
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
