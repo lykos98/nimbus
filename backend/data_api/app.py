@@ -78,7 +78,8 @@ def login():
     cur.close()
 
     if user and check_password_hash(user["password_hash"], password):
-        access_token = create_access_token(identity=user["id"])
+        # CORRECT: Use a simple string for the identity
+        access_token = create_access_token(identity=str(user["id"]))
         return jsonify(access_token=access_token), 200
     return jsonify({"msg": "Bad username or password"}), 401
 
@@ -89,11 +90,28 @@ def version():
     return jsonify({"version": "1.1.0-debug"}), 200
 
 
+# Profile Endpoint to get current user's details
+@app.route("/api/profile")
+@jwt_required()
+def profile():
+    # CORRECT: Get the string ID from the token
+    current_user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    # CORRECT: Fetch user from DB using the ID
+    cur.execute("SELECT id, username, is_admin FROM users WHERE id = %s", (int(current_user_id),))
+    user = cur.fetchone()
+    cur.close()
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+    return jsonify(dict(user)), 200
+
+
 @app.route('/api/stations', methods=['GET'])
 def get_stations():
 
     query = ''' import "influxdata/influxdb/schema"
-                schema.tagValues(bucket: "t2", tag: "stationId", start: t_start, stop: t_end) \
+                schema.tagValues(bucket: "t2", tag: "stationId", start: t_start, stop: t_end) 
             ''' 
     try:
         if request.args.get('start'):
@@ -125,8 +143,7 @@ def get_df(station: str):
         try: 
             start = request.args.get('start')
             stop  = request.args.get('stop')
-            #station = request.args.get('station')
-
+            
             start = datetime.fromisoformat(start)
             stop  = datetime.fromisoformat(stop)
 
@@ -169,7 +186,6 @@ def get_df(station: str):
         try:
             data_json = request.get_json()
             
-            # Authentication using PostgreSQL
             station_id_payload = data_json.get("stationId")
             provided_secret = data_json.get("secret")
             
@@ -185,7 +201,6 @@ def get_df(station: str):
             if not station_record or provided_secret != station_record["secret"]:
                 return jsonify({"status": "error", "message": "Unauthorized"}), 401
 
-            # remove secret from data before processing fields
             del data_json['secret']
             
             client = get_influx_db_client()
@@ -203,8 +218,6 @@ def get_df(station: str):
             return jsonify({"status": "success"}), 201
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
-
-
 
 @app.route('/api/stations/<string:station>/last', methods=['GET'])
 def get_last(station):
@@ -229,7 +242,6 @@ def get_last(station):
         return jsonify({"error" : "Cannot perform query"}), 400
 
 # Station Management Endpoints (Protected)
-
 @app.route("/api/admin/stations", methods=["GET", "POST"])
 @jwt_required()
 def admin_stations_management():
@@ -237,7 +249,7 @@ def admin_stations_management():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    cur.execute("SELECT * FROM users WHERE id = %s", (int(current_user_id),))
     current_user = cur.fetchone()
 
     if not current_user or not current_user["is_admin"]:
@@ -248,7 +260,7 @@ def admin_stations_management():
         cur.execute("SELECT id, station_id, user_id FROM stations")
         stations = cur.fetchall()
         cur.close()
-        return jsonify([dict(station) for station in stations]), 200
+        return jsonify([dict(s) for s in stations]), 200
     
     elif request.method == "POST":
         station_id = request.json.get("station_id", None)
@@ -257,7 +269,6 @@ def admin_stations_management():
             cur.close()
             return jsonify({"msg": "station_id and user_id are required"}), 400
 
-        # Generate a random secret
         secret = os.urandom(16).hex()
 
         try:
@@ -266,10 +277,6 @@ def admin_stations_management():
             conn.commit()
             cur.close()
             return jsonify({"id": new_station_id, "station_id": station_id, "secret": secret, "user_id": user_id}), 201
-        except psycopg2.IntegrityError:
-            conn.rollback()
-            cur.close()
-            return jsonify({"msg": "Station ID already exists or user_id is invalid"}), 409
         except Exception as e:
             conn.rollback()
             cur.close()
@@ -282,7 +289,7 @@ def admin_delete_station(station_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    cur.execute("SELECT * FROM users WHERE id = %s", (int(current_user_id),))
     current_user = cur.fetchone()
 
     if not current_user or not current_user["is_admin"]:
@@ -305,7 +312,7 @@ def user_stations():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    cur.execute("SELECT * FROM users WHERE id = %s", (int(current_user_id),))
     current_user = cur.fetchone()
     if not current_user:
         cur.close()
@@ -318,10 +325,9 @@ def user_stations():
     
     stations = cur.fetchall()
     cur.close()
-    return jsonify([dict(station) for station in stations]), 200
+    return jsonify([dict(s) for s in stations]), 200
 
 # User Management Endpoints (Admin Only)
-
 @app.route("/api/admin/users", methods=["GET", "POST"])
 @jwt_required()
 def admin_users_management():
@@ -329,7 +335,7 @@ def admin_users_management():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    cur.execute("SELECT * FROM users WHERE id = %s", (int(current_user_id),))
     current_user = cur.fetchone()
     
     if not current_user or not current_user["is_admin"]:
@@ -340,7 +346,7 @@ def admin_users_management():
         cur.execute("SELECT id, username, is_admin FROM users")
         users = cur.fetchall()
         cur.close()
-        return jsonify([dict(user) for user in users]), 200
+        return jsonify([dict(u) for u in users]), 200
     
     elif request.method == "POST":
         username = request.json.get("username", None)
@@ -359,10 +365,6 @@ def admin_users_management():
             conn.commit()
             cur.close()
             return jsonify({"id": new_user_id, "username": username, "is_admin": is_admin}), 201
-        except psycopg2.IntegrityError:
-            conn.rollback()
-            cur.close()
-            return jsonify({"msg": "Username already exists"}), 409
         except Exception as e:
             conn.rollback()
             cur.close()
@@ -375,7 +377,7 @@ def admin_user_detail_management(user_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
-    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    cur.execute("SELECT * FROM users WHERE id = %s", (int(current_user_id),))
     current_user = cur.fetchone()
 
     if not current_user or not current_user["is_admin"]:
@@ -414,10 +416,6 @@ def admin_user_detail_management(user_id):
             if rows_updated == 0:
                 return jsonify({"msg": "User not found"}), 404
             return jsonify({"msg": "User updated successfully"}), 200
-        except psycopg2.IntegrityError:
-            conn.rollback()
-            cur.close()
-            return jsonify({"msg": "Username already exists"}), 409
         except Exception as e:
             conn.rollback()
             cur.close()
