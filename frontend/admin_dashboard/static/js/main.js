@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await apiRequest('/api/login', 'POST', { username, password });
             
             if (!response) return; // Error already handled in apiRequest
-
+            console.log(response)
             const data = await response.json();
             if (response.ok) {
                 localStorage.setItem('access_token', data.access_token);
@@ -190,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 loginMessage.style.color = 'red';
             }
         } catch (error) {
+            throw(error);
             loginMessage.textContent = 'An error occurred during login.';
             loginMessage.style.color = 'red';
         }
