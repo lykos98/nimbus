@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, Response
 import requests
 import os
 
@@ -11,36 +11,39 @@ DATA_API_URL = os.getenv("DATA_API_INTERNAL_URL", "http://data-api:5555")
 def proxy_api(path):
     """A reverse proxy to forward API requests to the data-api service."""
     
-    # Construct the full URL for the data-api
     url = f"{DATA_API_URL}/api/{path}"
     
-    # Copy relevant headers from the incoming request
-    headers = {key: value for (key, value) in request.headers if key != 'Host'}
-    
-    # Forward the request to the data-api
+    # Forward headers from the client, except for the Host header.
+    fwd_headers = {key: value for (key, value) in request.headers if key.lower() != 'host'}
+
     try:
+        # Use stream=True to get the raw response without auto-decompression
         resp = requests.request(
             method=request.method,
             url=url,
-            headers=headers,
+            headers=fwd_headers,
             data=request.get_data(),
             cookies=request.cookies,
-            allow_redirects=False
+            allow_redirects=False,
+            stream=True
         )
-        
-        # Exclude certain headers from the response
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+
+        # Exclude hop-by-hop headers that should not be forwarded.
+        excluded_headers = ['transfer-encoding', 'connection']
         headers = [(name, value) for (name, value) in resp.raw.headers.items()
                    if name.lower() not in excluded_headers]
 
-        # Return the response from the data-api to the client
-        return (resp.content, resp.status_code, headers)
+        # Create a Flask response that streams the raw content and forwards the original headers.
+        # This correctly passes through gzipped content to the browser.
+        response = Response(resp.iter_content(chunk_size=1024), resp.status_code, headers)
+        
+        return response
 
     except requests.exceptions.RequestException as e:
-        # Handle connection errors or other request issues
-        raise
+        # Handle connection errors to the backend service.
         app.logger.error(f"Proxy request failed: {e}")
         return ("Proxy Error: Could not connect to the backend service.", 502)
+
 
 @app.route('/')
 def index():

@@ -8,6 +8,7 @@ import psycopg2
 from psycopg2 import extras 
 from werkzeug.security import generate_password_hash, check_password_hash 
 from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity 
+import jwt # For decoding for logging
 from utils import windows, validFields
 
 app = Flask(__name__)
@@ -27,6 +28,20 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 # JWT Configuration
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") 
 jwt = JWTManager(app)
+
+@app.before_request
+def log_jwt_info():
+    """Diagnostic logging to inspect JWT identity."""
+    if 'Authorization' in request.headers:
+        auth_header = request.headers['Authorization']
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split()[1]
+            try:
+                # Decode without verification to inspect payload
+                decoded_token = jwt.decode(token, options={"verify_signature": False})
+                app.logger.info(f"Incoming JWT 'sub' (identity): {decoded_token.get('sub')}")
+            except Exception as e:
+                app.logger.error(f"Could not decode JWT for logging: {e}")
 
 def get_db_connection():
     if "db_conn" not in g:
