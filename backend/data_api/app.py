@@ -63,9 +63,23 @@ def login():
     cur.close()
 
     if user and check_password_hash(user["password_hash"], password):
-        access_token = create_access_token(identity={"id": user["id"], "username": user["username"], "is_admin": user["is_admin"]})
+        access_token = create_access_token(identity=user["id"])
         return jsonify(access_token=access_token), 200
     return jsonify({"msg": "Bad username or password"}), 401
+
+# Profile Endpoint to get current user's details
+@app.route("/api/profile")
+@jwt_required()
+def profile():
+    current_user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT id, username, is_admin FROM users WHERE id = %s", (current_user_id,))
+    user = cur.fetchone()
+    cur.close()
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+    return jsonify(dict(user)), 200
 
 
 @app.route('/api/stations', methods=['GET'])
@@ -214,12 +228,16 @@ def get_last(station):
 @app.route("/api/admin/stations", methods=["GET", "POST"])
 @jwt_required()
 def admin_stations_management():
-    current_user = get_jwt_identity()
-    if not current_user["is_admin"]:
-        return jsonify({"msg": "Administration access required"}), 403
-
+    current_user_id = get_jwt_identity()
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    current_user = cur.fetchone()
+
+    if not current_user or not current_user["is_admin"]:
+        cur.close()
+        return jsonify({"msg": "Administration access required"}), 403
 
     if request.method == "GET":
         cur.execute("SELECT id, station_id, user_id FROM stations")
@@ -231,6 +249,7 @@ def admin_stations_management():
         station_id = request.json.get("station_id", None)
         user_id = request.json.get("user_id", None)
         if not station_id or not user_id:
+            cur.close()
             return jsonify({"msg": "station_id and user_id are required"}), 400
 
         # Generate a random secret
@@ -254,12 +273,17 @@ def admin_stations_management():
 @app.route("/api/admin/stations/<int:station_id>", methods=["DELETE"])
 @jwt_required()
 def admin_delete_station(station_id):
-    current_user = get_jwt_identity()
-    if not current_user["is_admin"]:
+    current_user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    current_user = cur.fetchone()
+
+    if not current_user or not current_user["is_admin"]:
+        cur.close()
         return jsonify({"msg": "Administration access required"}), 403
 
-    conn = get_db_connection()
-    cur = conn.cursor()
     cur.execute("DELETE FROM stations WHERE id = %s", (station_id,))
     conn.commit()
     rows_deleted = cur.rowcount
@@ -272,9 +296,15 @@ def admin_delete_station(station_id):
 @app.route("/api/user/stations", methods=["GET"])
 @jwt_required()
 def user_stations():
-    current_user = get_jwt_identity()
+    current_user_id = get_jwt_identity()
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    current_user = cur.fetchone()
+    if not current_user:
+        cur.close()
+        return jsonify({"msg": "User not found"}), 404
 
     if current_user["is_admin"]:
         cur.execute("SELECT id, station_id, user_id FROM stations")
@@ -290,12 +320,16 @@ def user_stations():
 @app.route("/api/admin/users", methods=["GET", "POST"])
 @jwt_required()
 def admin_users_management():
-    current_user = get_jwt_identity()
-    if not current_user["is_admin"]:
-        return jsonify({"msg": "Administration access required"}), 403
-
+    current_user_id = get_jwt_identity()
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    current_user = cur.fetchone()
+    
+    if not current_user or not current_user["is_admin"]:
+        cur.close()
+        return jsonify({"msg": "Administration access required"}), 403
 
     if request.method == "GET":
         cur.execute("SELECT id, username, is_admin FROM users")
@@ -309,6 +343,7 @@ def admin_users_management():
         is_admin = request.json.get("is_admin", False)
 
         if not username or not password:
+            cur.close()
             return jsonify({"msg": "Username and password are required"}), 400
 
         hashed_password = generate_password_hash(password)
@@ -331,12 +366,16 @@ def admin_users_management():
 @app.route("/api/admin/users/<int:user_id>", methods=["PUT", "DELETE"])
 @jwt_required()
 def admin_user_detail_management(user_id):
-    current_user = get_jwt_identity()
-    if not current_user["is_admin"]:
-        return jsonify({"msg": "Administration access required"}), 403
-
+    current_user_id = get_jwt_identity()
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("SELECT * FROM users WHERE id = %s", (current_user_id,))
+    current_user = cur.fetchone()
+
+    if not current_user or not current_user["is_admin"]:
+        cur.close()
+        return jsonify({"msg": "Administration access required"}), 403
 
     if request.method == "PUT":
         username = request.json.get("username", None)
