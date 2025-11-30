@@ -1,4 +1,5 @@
 import influxdb_client
+import logging
 from flask import Flask, request, jsonify, g
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client import Point
