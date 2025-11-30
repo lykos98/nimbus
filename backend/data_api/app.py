@@ -144,8 +144,9 @@ def get_df(station: str):
             res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params )
 
             return res.to_json()
-        except:
-            return 400, "Cannot perform query"
+        except Exception as e:
+            app.logger.error(f"Error in GET /api/stations/.../data: {e}")
+            return jsonify({"error": "Cannot perform query"}), 400
     elif request.method == "POST":
         try:
             data_json = request.get_json()
