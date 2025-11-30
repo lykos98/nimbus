@@ -82,19 +82,11 @@ def login():
         return jsonify(access_token=access_token), 200
     return jsonify({"msg": "Bad username or password"}), 401
 
-# Profile Endpoint to get current user's details
-@app.route("/api/profile")
-@jwt_required()
-def profile():
-    current_user_id = get_jwt_identity()
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute("SELECT id, username, is_admin FROM users WHERE id = %s", (current_user_id,))
-    user = cur.fetchone()
-    cur.close()
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
-    return jsonify(dict(user)), 200
+
+# Version endpoint for debugging deployment
+@app.route("/api/version")
+def version():
+    return jsonify({"version": "1.1.0-debug"}), 200
 
 
 @app.route('/api/stations', methods=['GET'])
