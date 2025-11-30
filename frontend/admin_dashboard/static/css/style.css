@@ -6,6 +6,10 @@ body {
     padding: 20px;
 }
 
+.align-left {
+    text-align: left;
+}
+
 .container {
     background-color: #fff;
     padding: 30px;
