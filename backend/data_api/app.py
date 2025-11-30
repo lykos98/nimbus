@@ -215,6 +215,7 @@ def get_df(station: str):
             
             point.time(datetime.now())
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
+            app.logger.info(f" -> Recieved: {data_json}")
             return jsonify({"status": "success"}), 201
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
@@ -319,9 +320,9 @@ def user_stations():
         return jsonify({"msg": "User not found"}), 404
 
     if current_user["is_admin"]:
-        cur.execute("SELECT id, station_id, user_id FROM stations")
+        cur.execute("SELECT id, station_id, user_id, secret FROM stations")
     else:
-        cur.execute("SELECT id, station_id, user_id FROM stations WHERE user_id = %s", (current_user["id"],))
+        cur.execute("SELECT id, station_id, user_id, secret FROM stations WHERE user_id = %s", (current_user["id"],))
     
     stations = cur.fetchall()
     cur.close()

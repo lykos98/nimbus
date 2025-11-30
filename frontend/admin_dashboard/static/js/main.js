@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const dashboardMessage = document.getElementById('dashboard-message');
     const currentUserSpan = document.getElementById('current-username');
+    const currentUserIdSpan = document.getElementById('current-userid');
     const logoutButton = document.getElementById('logout-button');
 
     const userManagementSection = document.getElementById('user-management');
@@ -96,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         currentUser = await response.json();
         currentUserSpan.textContent = currentUser.username;
+        currentUserIdSpan.textContent = currentUser.id;
 
         if (currentUser.is_admin) {
             userManagementSection.style.display = 'block';
