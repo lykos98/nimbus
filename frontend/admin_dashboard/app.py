@@ -38,6 +38,7 @@ def proxy_api(path):
 
     except requests.exceptions.RequestException as e:
         # Handle connection errors or other request issues
+        raise
         app.logger.error(f"Proxy request failed: {e}")
         return ("Proxy Error: Could not connect to the backend service.", 502)
 

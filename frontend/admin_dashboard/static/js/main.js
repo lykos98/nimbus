@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutButton = document.getElementById('logout-button');
 
     const userManagementSection = document.getElementById('user-management');
-    const stationManagementSection = document.getElementById('station-management');
     
     const addUserForm = document.getElementById('add-user-form');
     const usersTableBody = document.querySelector('#users-table tbody');
@@ -19,30 +18,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const stationsTableBody = document.querySelector('#stations-table tbody');
 
     const API_URL = ""; // The UI is served from the same origin as the API
+    let currentUser = null; // Store current user profile
 
     /**
      * UTILITY FUNCTIONS
      */
 
-    function parseJwt(token) {
-        try {
-            return JSON.parse(atob(token.split('.')[1]));
-        } catch (e) {
-            return null;
-        }
-    }
-
     async function apiRequest(endpoint, method = 'GET', body = null) {
         const token = localStorage.getItem('access_token');
-        if (!token) {
+        // No token needed for the login endpoint itself
+        if (!token && endpoint !== '/api/login') {
             showLogin();
-            return;
+            return null;
         }
 
         const headers = {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
         };
+
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
 
         const config = {
             method: method,
@@ -55,16 +51,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const response = await fetch(API_URL + endpoint, config);
-            if (response.status === 401) {
+            if (response.status === 401 && endpoint !== '/api/login') {
                 // Token is invalid or expired
+                console.log('Token expired or invalid. Logging out.');
                 logout();
-                return;
+                return null;
             }
             return response;
         } catch (error) {
             console.error('API Request Error:', error);
             dashboardMessage.textContent = 'Network error occurred.';
             dashboardMessage.style.color = 'red';
+            return null;
         }
     }
 
@@ -75,34 +73,38 @@ document.addEventListener('DOMContentLoaded', () => {
     function showLogin() {
         loginSection.style.display = 'block';
         dashboardSection.style.display = 'none';
+        currentUser = null;
         localStorage.removeItem('access_token');
     }
 
-    function showDashboard() {
+    async function showDashboard() {
         loginSection.style.display = 'none';
         dashboardSection.style.display = 'block';
-        
-        const token = localStorage.getItem('access_token');
-        if (token) {
-            const decodedToken = parseJwt(token);
-            const username = decodedToken?.sub?.username || 'User';
-            const isAdmin = decodedToken?.sub?.is_admin || false;
-
-            currentUserSpan.textContent = username;
-
-            if (isAdmin) {
-                userManagementSection.style.display = 'block';
-                loadAdminData();
-            } else {
-                userManagementSection.style.display = 'none';
-                loadUserData();
-            }
-        }
+        await loadUserProfile();
     }
 
     /**
      * DATA LOADING AND RENDERING
      */
+
+    async function loadUserProfile() {
+        const response = await apiRequest('/api/profile');
+        if (!response || !response.ok) {
+            showLogin();
+            return;
+        }
+        
+        currentUser = await response.json();
+        currentUserSpan.textContent = currentUser.username;
+
+        if (currentUser.is_admin) {
+            userManagementSection.style.display = 'block';
+            await loadAdminData();
+        } else {
+            userManagementSection.style.display = 'none';
+            await loadUserData();
+        }
+    }
 
     async function loadAdminData() {
         await loadUsers();
@@ -115,38 +117,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadUsers() {
         const response = await apiRequest('/api/admin/users');
-        const users = await response.json();
+        if (!response || !response.ok) return;
 
-        usersTableBody.innerHTML = '';
-        users.forEach(user => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${user.id}</td>
-                <td>${user.username}</td>
-                <td>${user.is_admin ? 'Yes' : 'No'}</td>
-                <td><button class="delete-user" data-id="${user.id}">Delete</button></td>
-            `;
-            usersTableBody.appendChild(row);
-        });
+        try {
+            const users = await response.json();
+            usersTableBody.innerHTML = '';
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.id}</td>
+                    <td>${user.username}</td>
+                    <td>${user.is_admin ? 'Yes' : 'No'}</td>
+                    <td><button class="delete-user" data-id="${user.id}">Delete</button></td>
+                `;
+                usersTableBody.appendChild(row);
+            });
+        } catch (error) {
+            console.error("Failed to process users response.", error);
+        }
     }
 
     async function loadStations(isAdmin = false) {
         const endpoint = isAdmin ? '/api/admin/stations' : '/api/user/stations';
         const response = await apiRequest(endpoint);
-        const stations = await response.json();
-
-        stationsTableBody.innerHTML = '';
-        stations.forEach(station => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${station.id}</td>
-                <td>${station.station_id}</td>
-                <td>${station.secret || 'N/A'}</td> 
-                <td>${station.user_id}</td>
-                <td><button class="delete-station" data-id="${station.id}">Delete</button></td>
-            `;
-            stationsTableBody.appendChild(row);
-        });
+        if (!response || !response.ok) return;
+        
+        try {
+            const stations = await response.json();
+            stationsTableBody.innerHTML = '';
+            stations.forEach(station => {
+                const row = document.createElement('tr');
+                // For non-admins, the secret is not sent. Handled this in the backend already.
+                const secret = station.secret || 'N/A (Hidden)';
+                row.innerHTML = `
+                    <td>${station.id}</td>
+                    <td>${station.station_id}</td>
+                    <td>${secret}</td> 
+                    <td>${station.user_id}</td>
+                    <td><button class="delete-station" data-id="${station.id}">Delete</button></td>
+                `;
+                // Hide delete button for non-admins
+                if (!isAdmin) {
+                    row.querySelector('.delete-station').style.display = 'none';
+                }
+                stationsTableBody.appendChild(row);
+            });
+        } catch (error) {
+            console.error("Failed to process stations response.", error);
+        }
     }
     
     /**
@@ -159,16 +177,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = loginForm.password.value;
 
         try {
-            const response = await fetch(API_URL + '/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
+            const response = await apiRequest('/api/login', 'POST', { username, password });
+            
+            if (!response) return; // Error already handled in apiRequest
 
             const data = await response.json();
             if (response.ok) {
                 localStorage.setItem('access_token', data.access_token);
-                showDashboard();
+                await showDashboard();
             } else {
                 loginMessage.textContent = data.msg || 'Login failed.';
                 loginMessage.style.color = 'red';
@@ -190,12 +206,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const is_admin = addUserForm.querySelector('#new-is-admin').checked;
 
         const response = await apiRequest('/api/admin/users', 'POST', { username, password, is_admin });
-        const data = await response.json();
         
-        if (response.ok) {
+        if (response && response.ok) {
             addUserForm.reset();
-            loadUsers();
+            await loadUsers();
         } else {
+            const data = response ? await response.json() : { msg: "Request failed" };
             alert(`Error: ${data.msg}`);
         }
     });
@@ -206,12 +222,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const user_id = addStationForm.querySelector('#station-user-id').value;
 
         const response = await apiRequest('/api/admin/stations', 'POST', { station_id, user_id: parseInt(user_id) });
-        const data = await response.json();
-
-        if (response.ok) {
+        
+        if (response && response.ok) {
             addStationForm.reset();
-            loadStations(true);
+            await loadStations(true);
         } else {
+            const data = response ? await response.json() : { msg: "Request failed" };
             alert(`Error: ${data.msg}`);
         }
     });
@@ -221,10 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const userId = e.target.dataset.id;
             if (confirm(`Are you sure you want to delete user ${userId}?`)) {
                 const response = await apiRequest(`/api/admin/users/${userId}`, 'DELETE');
-                if (response.ok) {
-                    loadUsers();
+                if (response && response.ok) {
+                    await loadUsers();
                 } else {
-                    const data = await response.json();
+                    const data = response ? await response.json() : { msg: "Request failed" };
                     alert(`Error: ${data.msg}`);
                 }
             }
@@ -236,10 +252,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const stationId = e.target.dataset.id;
             if (confirm(`Are you sure you want to delete station ${stationId}?`)) {
                 const response = await apiRequest(`/api/admin/stations/${stationId}`, 'DELETE');
-                if (response.ok) {
-                    loadStations(true);
+                if (response && response.ok) {
+                    await loadStations(true);
                 } else {
-                    const data = await response.json();
+                    const data = response ? await response.json() : { msg: "Request failed" };
                     alert(`Error: ${data.msg}`);
                 }
             }
