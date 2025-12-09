@@ -1,4 +1,12 @@
 allowed_meausures = ['airTemperature', 'airHumidity', 'airPressure', 'batteryV', 'solarV', 'windSpeed', 'windDirection']
+validFields = [
+            "airTemperature", "airHumidity", "airPressure", "airCO2ppm", "airNOXppm",
+            "windDirection", "windSpeed",
+            "rainmm",
+            "terrainTemperature", "terrainHumidity", "terrainPH",
+            "waterTemperature", "waterHumidity", "waterPH",
+            "batteryV", "batteryA", "solarV", "solarA"
+            ]
 column_ignore = ['table', 'result', '_start', '_stop', '_time', '_measurement', 'stationId', 'RSSI']
 icons = {
         'airTemperature' : 'assets/temp.svg',
