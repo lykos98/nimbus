@@ -1,0 +1,11 @@
+# ESP-IDF build output
+build/
+
+# SDK config (device-specific)
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+sdkconfig.default
+
+# Local config with credentials
+main/config.h
