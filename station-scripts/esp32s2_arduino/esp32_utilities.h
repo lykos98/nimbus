@@ -122,6 +122,8 @@ void retrieve_and_store_certificate(String new_cert_hash)
 {
     HTTPClient http;
     http.begin(cert_url);
+    http.setConnectTimeout(5000);
+    delay(100);
     int http_code = http.GET();
 
     if (http_code == 200) {

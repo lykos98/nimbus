@@ -1,0 +1,24 @@
+
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PSWD "YOUR_WIFI_PASSWORD"
+
+#define STATION_NAME "your_station_name"
+#define SECRET "your_secret_key"
+
+#define ANGLE_OFFSET 270
+
+#define BMP280_SDA GPIO_NUM_9
+#define BMP280_SCL GPIO_NUM_8
+
+#define AHT20_SDA GPIO_NUM_9
+#define AHT20_SCL GPIO_NUM_8
+
+#define AMS5600_SDA GPIO_NUM_9
+#define AMS5600_SCL GPIO_NUM_8
+
+#define SOLAR_PIN GPIO_NUM_17 
+#define BATTERY_PIN GPIO_NUM_16
+
+// #define ANEMOMETER_PIN GPIO_NUM_4
+#define ANEMOMETER_PIN GPIO_NUM_7
+#define ANEMOMETER_LEN_M 0.1
