@@ -1,0 +1,32 @@
+dependencies:
+  esp-idf-lib/esp_idf_lib_helpers:
+    version: '*'
+  esp-idf-lib/i2cdev:
+    version: '*'
+description: Driver for AHT10/AHT15/AHT20 temperature and humidity sensor
+discussion: https://github.com/esp-idf-lib/core/discussions
+documentation: https://esp-idf-lib.github.io/aht/
+files:
+  exclude:
+  - docs/**/*
+issues: https://github.com/esp-idf-lib/aht/issues
+license: BSD-3
+maintainers:
+- Ruslan V. Uss (@UncleRus) <unclerus@gmail.com>
+repository: git://github.com/esp-idf-lib/aht.git
+repository_info:
+  commit_sha: 1cf781c8e6ebd0e466ff95132cc1ccad4a1983fa
+  path: .
+targets:
+- esp32
+- esp32c2
+- esp32c3
+- esp32c5
+- esp32c6
+- esp32c61
+- esp32h2
+- esp32p4
+- esp32s2
+- esp32s3
+url: https://github.com/esp-idf-lib/core
+version: 1.0.8

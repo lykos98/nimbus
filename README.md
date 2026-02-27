@@ -8,6 +8,13 @@ Here I will document my journey in building my weather sensors network, somethin
 The idea is to open source all the kits, parts and codes, and also the instructions to build weather stations. 
 Maybe one day to share these kits among people, and to grow a community around citizen science. 
 
+## Project Structure
+This repository is organized into several components:
+
+- **[Data API (Backend)](backend/data_api/README.md)**: Flask-based REST API for data ingestion and retrieval.
+- **Frontend**: Dashboard and admin interface (documentation pending).
+- **PCB**: KiCad designs for the weather station boards.
+- **Station Scripts**: Firmware for ESP32 and other microcontrollers.
 
 ## TODO
 Frontend:
