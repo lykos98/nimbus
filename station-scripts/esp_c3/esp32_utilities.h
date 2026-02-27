@@ -1,5 +1,5 @@
 #pragma once
-
+#include "secrets.h"
 #include "esp_wifi_types.h"
 #include "pins_arduino.h"
 #include "esp32-hal-gpio.h"
@@ -64,22 +64,9 @@ int read_angle_as5600_raw()
 
 /* ---- CERTIFICATE RETRIVAL AND BROKER CONFIGURATION ---- */
 
-const char* hash_url = "https://cert.lykos.cc/ca-cert-hash"; // URL for hash endpoint
-const char* cert_url = "https://cert.lykos.cc/ca-cert";      // URL for full certificate
-
-Preferences preferences;
-WebServer server(80);  // Create a web server on port 80
-
-#define DNS_PORT 53
-DNSServer dns_server;
 
 WiFiClientSecure wifiClient;
 MqttClient mqttClient(wifiClient);
-
-//const char broker[] = "192.168.1.117";
-const char broker[] = "lykos.cc";
-int        port     = 8883;
-const char topic[]  = "esp32/sensors";
 
 #define MAX_STR_LEN 40
 
@@ -117,238 +104,6 @@ void print_status()
     return;
 }
 
-void retrieve_and_store_certificate(String new_cert_hash) 
-{
-    HTTPClient http;
-    http.begin(cert_url);
-    int http_code = http.GET();
-
-    if (http_code == 200) {
-        String certData = http.getString();  // Get the full certificate
-        LOGF("Certificate retrieved from server: %s", certData.c_str());
-
-        // Store the new certificate and its hash in flash memory
-        preferences.begin("cert-storage", false);
-        preferences.putString("ca-cert", certData);      // Store the certificate data
-        preferences.putString("ca-cert-hash", new_cert_hash);  // Update the stored hash
-        preferences.end();
-
-        LOGF("Stored certificate and hash updated.");
-    } 
-    else 
-    {
-        LOGF("Failed to retrieve certificate, HTTP code: %d", http_code);
-    }
-}
-
-void check_certificate() 
-{
-    // Step 1: Get the certificate hash from the server
-    HTTPClient http;
-    http.begin(hash_url);
-    int http_code = http.GET();
-
-    if (http_code == 200) 
-    {
-        String new_cert_hash = http.getString();  // Get the hash from server
-        LOGF("Hash retrieved from server: %s", new_cert_hash.c_str());
-
-
-        // Retrieve the stored hash from flash memory
-        preferences.begin("cert-storage", false);
-        String stored_cert_hash = preferences.getString("ca-cert-hash", "");
-
-        if (stored_cert_hash == new_cert_hash) {
-            LOGF("Certificate hash matches the stored version.");
-        } else {
-            LOGF("Certificate hash has changed!");
-            // Step 2: Retrieve the full certificate since the hash is different
-            retrieve_and_store_certificate(new_cert_hash);
-        }
-
-        preferences.end();
-    } 
-    else 
-    {
-        LOGF("Failed to retrieve certificate hash, HTTP code: %d", http_code);
-    }
-    http.end();
-}
-
-
-
-String load_certificate() {
-    preferences.begin("cert-storage", true);  // Open storage in read-only mode
-    String stored_cert = preferences.getString("ca-cert", "");  // Retrieve the certificate or default to an empty string if not found
-    preferences.end();  // Close preferences to free memory
-
-    if (stored_cert.length() > 0) {
-        LOGF("Certificate loaded from preferences:");
-        //LOGF(stored_cert);
-    } else {
-        LOGF("No certificate found in preferences.");
-    }
-
-    return stored_cert;
-}
-
-
-/* ---- AUTO CONFIG for ssid and psswd ---- */
-
-
-String ssid, password, station_id;
-
-void handle_save_config()
-{
-    ssid       = server.arg("ssid");
-    password   = server.arg("password");
-    station_id = server.arg("station_id");
-
-    if( ssid.length() <= MAX_SSID_LEN && 
-        password.length() <= MAX_STR_LEN &&
-        station_id.length() <= MAX_STR_LEN && station_id.length() >= 4)
-    {
-      preferences.begin("wifi-config", false);  // Open preferences in read-write mode
-      preferences.putString("ssid", ssid);
-      preferences.putString("password", password);
-      preferences.putString("station_id", station_id);
-      preferences.end();
-      server.send(200, "text/html", 
-              R"rawliteral(
-      <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; background: #f4f4f4; text-align: center; margin: 50px; }
-              .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: inline-block; }
-              h1 { color: #333; }
-              h2 { color: #007bff; font-size: 24px; }
-              button { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; transition: 0.3s; }
-              button:hover { background: #0056b3; }
-              input { width: 80%; padding: 10px; margin: 10px; border: 1px solid #ccc; border-radius: 5px; }
-            </style>
-          </head>
-          <body style="width:100vw; height:100vh; padding:auto">
-              <div style="margin:auto; width:fit-content">
-                  <h1> Config saved, reboot the board using the reset button </h1>
-          </body>
-      </html>)rawliteral");
-    }
-    else {
-      server.send(200, "text/html", "<h1>Cannot save preferences, malformed strings</h1>");
-    }
-}
-
-void handle_get_calibration()
-{
-  int angle = read_angle_as5600_raw();
-  float angleDegrees = (float)angle / 4096.0 * 360.0;
-  server.send(200, "text/plain", String(angleDegrees));
-}
-
-void handle_save_calibration()
-{
-    int angle = read_angle_as5600_raw();
-    preferences.begin("wifi-config", false);  // Open preferences in read-write mode
-    auto size = preferences.putInt("vane_cal", angle);
-    preferences.end();
-
-    LOGF("Writing vane calibration %d", angle);
-    server.send(200, "text/plain", "nope");
-}
-
-
-
-void start_config_portal() {
-  LOGF("Starting configuration portal...");
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP("nimbus_config");
-
-  IPAddress IP = WiFi.softAPIP();
-  LOGF("AP IP address: %s",String(IP).c_str());
-  
-  dns_server.start(DNS_PORT, "*", IP);
-
-  server.on("/", HTTP_GET, []() {
-    server.send(200, "text/html", 
-      R"rawliteral(<html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; background: #f4f4f4; text-align: center; margin: 50px; }
-            .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); display: inline-block; }
-            h1 { color: #333; }
-            h2 { color: #007bff; font-size: 24px; }
-            button { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; transition: 0.3s; }
-            button:hover { background: #0056b3; }
-            input { width: 80%; padding: 10px; margin: 10px; border: 1px solid #ccc; border-radius: 5px; }
-          </style>
-        </head>
-        <script>
-            function updateSensor() {
-                fetch('/vane')
-                .then(response => response.text())
-                .then(data => { document.getElementById('sensorValue').innerText = data; });
-                setTimeout(updateSensor, 500); // Fetch every 500ms
-            }
-            function saveCalibration() {
-                let value = document.getElementById('sensorValue').innerText;
-                fetch('/save_calibration')
-                .then(response => response.text())
-                .then(data => alert('Calibration Saved: ' + data));
-            }
-            window.onload = updateSensor;
-        </script>
-        <body style="width:100vw; height:100vh; padding:auto">
-            <div style="margin:auto; width:fit-content">
-                <h1> Nimbus configurator </h1>
-                <h1>Current Sensor Value: <span id="sensorValue">0</span></h1>
-                <button onclick="saveCalibration()">Save Calibration</button>
-                <h1> Insert ssid and password </h1>
-                <form action="/save_config" method="post">
-                    <div>
-                        Station ID:<br> <input type="text" name="station_id" maxlength=40><br>
-                    </div>
-                    <div>
-                        SSID:<br> <input type="text" name="ssid" maxlength=40><br>
-                    </div>
-                    <div>
-                        Password:<br> <input type="password" name="password" maxlength=40><br>
-                    </div>
-                    <button type="submit"> Save </button>
-                </form>
-            </div>
-        </body>
-    </html>)rawliteral"
-  );
-    //server.send(200, "text/html", "ciao");
-  });
-
-  server.on("/save_calibration", HTTP_GET, handle_save_calibration);
-  server.on("/save_config", HTTP_POST, handle_save_config);
-  server.on("/vane", HTTP_GET, handle_get_calibration);
-
-  server.begin();
-  while(1)
-  { 
-    dns_server.processNextRequest();
-    server.handleClient();
-    delay(2);
-  }
-  
-}
-
-
-void check_reset_condition() {
-  pinMode(RESET_PIN, INPUT_PULLUP);
-  if (digitalRead(RESET_PIN) == LOW) {
-    LOGF("Resetting WiFi credentials...");
-    preferences.begin("wifi-config", false);  // Open preferences in read-write mode
-    preferences.clear();  // Clear all keys in "wifi-config" namespace
-    preferences.end();
-    delay(10000);
-    esp_restart();
-  }
-}
-
 void blink_n_times(int n = 5)
 {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -365,17 +120,11 @@ void blink_n_times(int n = 5)
 void connect_to_wifi() {
   WiFi.mode(WIFI_STA);
   //WiFi.setTxPower(WIFI_POWER_5dBm);
-  preferences.begin("wifi-config", false);
-  ssid       = preferences.getString("ssid", "");
-  password   = preferences.getString("password", "");
-  station_id = preferences.getString("station_id","");
-  preferences.end();
 
   int try_count = 0;
   
   delay(100);
-  if(ssid.length() == 0 || password.length() == 0) start_config_portal();
-  WiFi.begin(ssid.c_str(), password.c_str());
+  WiFi.begin(WIFI_SSID, WIFI_PASSWD);
 
   LOGF("Connecting to WiFi...");
   unsigned long start_attempt_time = millis();
@@ -395,30 +144,6 @@ void connect_to_wifi() {
   }
 }
 
-void connect_to_broker(MqttClient& mqttClient, const char* broker, const int port) {
-
-  #define MAX_N_TRIES 10
-  
-  LOGF("Attempting to connect to the MQTT broker: %s", broker);
-  unsigned long start_attempt_time = millis();
-
-  int try_count = 0;
-  while (!mqttClient.connect(broker, port) && try_count < MAX_N_TRIES) {
-    delay(500);
-    #ifdef DEBUG
-    #endif
-    delay(500);
-    try_count++;
-  }
-
-  if (try_count == MAX_N_TRIES) {
-    LOGF("MQTT connection failed! Error code = %d", mqttClient.connectError());
-    esp_sleep_enable_timer_wakeup(5 * 1000000);
-    esp_deep_sleep_start();
-  } else {
-    LOGF("Broker Connected!");
-  }
-}
 
 /* ---- Utility for reading accureately voltage ---- */
 
