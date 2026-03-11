@@ -260,7 +260,7 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
                 display_format='YYYY-MM-DD',
                 style={'width': '100%', 'padding': '10px'}
             )
-        ], md=2, xs=12),
+        ], md=3, xs=12),
         
         dbc.Col([
             dbc.Row([
