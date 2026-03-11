@@ -260,7 +260,7 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
                 display_format='YYYY-MM-DD',
                 style={'width': '100%', 'padding': '10px'}
             )
-        ], md=6, xs=12),
+        ], md=2, xs=12),
         
         dbc.Col([
             dbc.Row([
@@ -279,13 +279,13 @@ app.layout = html.Div(style={ 'padding': '20px', "fontFamily" : "SUSE", }, child
                         ], width = 6) 
                     ], style = {'padding' : '10px', 'justifyContent' : 'space-around'}),
 
-        ], xs = 12, md = 6),
-        dcc.Interval(
-            id='interval-component',
-            interval=60*1000, # in milliseconds
-            n_intervals=0
-        )
-        ], style={'marginTop': '20px', 'marginBottom' : '20px'}),
+            ], xs = 12, md = 4),
+            dcc.Interval(
+                id='interval-component',
+                interval=60*1000, # in milliseconds
+                n_intervals=0
+            )
+        ], style={'marginTop': '20px', 'marginBottom' : '20px'}, justify="between"),
     
     # Content Area
     dbc.Tabs([
