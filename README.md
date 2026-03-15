@@ -20,9 +20,14 @@ This repository is organized into several components:
 Frontend:
 - fix thing date in axis of plots
 - improve overall look
-Stations:
-- implement configurator to configure wifi at first boot 
-- implement automatic certificate retrieval
-- migrate all stations to mqtt with ssl
-Backend:
-- server for ca.crt obtaining
+- expand admin panel with profiles
+    - each one profile is associated to stations, can see secrets can modify description of stations.
+    - admin can see anything
+    - user can see its station
+    - user can set visibility of the station in the pubblic dashboard
+    - admin can see all stations with messages and users 
+- misc:
+    - each station has a message queue that can be seen from the admin, in particular, you should be able to see the message queue for each station in order to get info on a status, like healthy and so on
+
+
+Backend
