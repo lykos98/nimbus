@@ -143,3 +143,104 @@ td button {
 .message.success {
     color: green;
 }
+
+/* Profile Section */
+.profile-info {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+.profile-info p {
+    margin: 8px 0;
+}
+
+/* Station Management */
+.station-description {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.station-public {
+    width: auto;
+    margin: 0;
+}
+
+.secret-cell {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.status-healthy {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-error {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Level Badges */
+.level-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.level-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.level-warning {
+    background-color: #ffc107;
+    color: #333;
+}
+
+.level-error {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Save Button */
+.save-station {
+    background-color: #28a745;
+    margin-left: 5px;
+}
+
+.save-station:hover {
+    background-color: #218838;
+}
+
+/* Message Queue Section */
+#message-station-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    margin-bottom: 20px;
+}
+
+#messages-container {
+    margin-top: 20px;
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}

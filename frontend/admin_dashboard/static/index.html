@@ -31,13 +31,22 @@
         <div id="dashboard-section" style="display: none;">
             <div class="dashboard-header">
                 <div>
-                    <h2 class="align-left">Welcome, <span  id="current-username"></span>!</h2>
+                    <h2 class="align-left">Welcome, <span id="current-username"></span>!</h2>
                     <br>
-                    <h3 class="align-left">(User ID: <span  id="current-userid"></span>)</h3>
+                    <h3 class="align-left">(User ID: <span id="current-userid"></span>)</h3>
                 </div>
                 <button id="logout-button">Logout</button>
             </div>
             <div id="dashboard-message" class="message"></div>
+
+            <!-- Profile Section -->
+            <div id="profile-section" class="management-section">
+                <h3>My Profile</h3>
+                <div class="profile-info">
+                    <p><strong>Username:</strong> <span id="profile-username"></span></p>
+                    <p><strong>Admin:</strong> <span id="profile-is-admin"></span></p>
+                </div>
+            </div>
 
             <!-- User Management (Admin Only) -->
             <div id="user-management" class="management-section" style="display: none;">
@@ -71,7 +80,6 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Users will be loaded here -->
                     </tbody>
                 </table>
             </div>
@@ -79,7 +87,7 @@
             <!-- Station Management -->
             <div id="station-management" class="management-section">
                 <h3>Station Management</h3>
-                <form id="add-station-form">
+                <form id="add-station-form" style="display: none;">
                     <h4>Add New Station</h4>
                     <div class="form-group">
                         <label for="new-station-id">Station ID:</label>
@@ -93,21 +101,47 @@
                     <div id="add-station-message" class="message"></div>
                 </form>
 
-                <h4>Existing Stations</h4>
+                <h4>My Stations</h4>
                 <table id="stations-table">
                     <thead>
                         <tr>
                             <th>ID</th>
                             <th>Station ID</th>
                             <th>Secret</th>
-                            <th>User ID</th>
+                            <th>Description</th>
+                            <th>Public</th>
+                            <th>Last Seen</th>
+                            <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Stations will be loaded here -->
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Message Queue Section -->
+            <div id="message-queue-section" class="management-section">
+                <h3>Station Message Queue</h3>
+                <p>Select a station to view its message queue:</p>
+                <select id="message-station-select">
+                    <option value="">-- Select Station --</option>
+                </select>
+                <div id="messages-container" style="display: none;">
+                    <h4>Messages for <span id="selected-station-id"></span></h4>
+                    <table id="messages-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Level</th>
+                                <th>Message</th>
+                                <th>Created At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

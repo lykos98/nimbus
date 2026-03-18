@@ -10,24 +10,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentUserIdSpan = document.getElementById('current-userid');
     const logoutButton = document.getElementById('logout-button');
 
+    const profileSection = document.getElementById('profile-section');
+    const profileUsername = document.getElementById('profile-username');
+    const profileIsAdmin = document.getElementById('profile-is-admin');
+
     const userManagementSection = document.getElementById('user-management');
+    const addStationForm = document.getElementById('add-station-form');
     
     const addUserForm = document.getElementById('add-user-form');
     const usersTableBody = document.querySelector('#users-table tbody');
-    
-    const addStationForm = document.getElementById('add-station-form');
     const stationsTableBody = document.querySelector('#stations-table tbody');
 
-    const API_URL = ""; // The UI is served from the same origin as the API
-    let currentUser = null; // Store current user profile
+    const messageStationSelect = document.getElementById('message-station-select');
+    const messagesContainer = document.getElementById('messages-container');
+    const selectedStationIdSpan = document.getElementById('selected-station-id');
+    const messagesTableBody = document.querySelector('#messages-table tbody');
 
-    /**
-     * UTILITY FUNCTIONS
-     */
+    const API_URL = "";
+    let currentUser = null;
+    let isAdmin = false;
 
     async function apiRequest(endpoint, method = 'GET', body = null) {
         const token = localStorage.getItem('access_token');
-        // No token needed for the login endpoint itself
         if (!token && endpoint !== '/api/login') {
             showLogin();
             return null;
@@ -53,8 +57,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(API_URL + endpoint, config);
             if (response.status === 401 && endpoint !== '/api/login') {
-                // Token is invalid or expired
-                console.log('Token expired or invalid. Logging out.');
                 logout();
                 return null;
             }
@@ -66,10 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return null;
         }
     }
-
-    /**
-     * UI TOGGLE FUNCTIONS
-     */
 
     function showLogin() {
         loginSection.style.display = 'block';
@@ -84,10 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadUserProfile();
     }
 
-    /**
-     * DATA LOADING AND RENDERING
-     */
-
     async function loadUserProfile() {
         const response = await apiRequest('/api/profile');
         if (!response || !response.ok) {
@@ -98,23 +92,29 @@ document.addEventListener('DOMContentLoaded', () => {
         currentUser = await response.json();
         currentUserSpan.textContent = currentUser.username;
         currentUserIdSpan.textContent = currentUser.id;
+        profileUsername.textContent = currentUser.username;
+        profileIsAdmin.textContent = currentUser.is_admin ? 'Yes' : 'No';
+        
+        isAdmin = currentUser.is_admin;
 
-        if (currentUser.is_admin) {
+        if (isAdmin) {
             userManagementSection.style.display = 'block';
+            addStationForm.style.display = 'block';
             await loadAdminData();
         } else {
             userManagementSection.style.display = 'none';
+            addStationForm.style.display = 'none';
             await loadUserData();
         }
     }
 
     async function loadAdminData() {
         await loadUsers();
-        await loadStations(true);
+        await loadStations();
     }
     
     async function loadUserData() {
-        await loadStations(false);
+        await loadStations();
     }
 
     async function loadUsers() {
@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadStations(isAdmin = false) {
+    async function loadStations() {
         const endpoint = isAdmin ? '/api/admin/stations' : '/api/user/stations';
         const response = await apiRequest(endpoint);
         if (!response || !response.ok) return;
@@ -147,32 +147,96 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const stations = await response.json();
             stationsTableBody.innerHTML = '';
+            messageStationSelect.innerHTML = '<option value="">-- Select Station --</option>';
+            
             stations.forEach(station => {
+                const lastSeen = station.last_seen ? new Date(station.last_seen) : null;
+                const now = new Date();
+                const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+                const isHealthy = lastSeen && lastSeen > tenMinutesAgo;
+                const lastSeenStr = lastSeen ? lastSeen.toLocaleString() : 'Never';
+                const statusClass = isHealthy ? 'status-healthy' : 'status-error';
+                const statusText = isHealthy ? 'Healthy' : 'Error (>10min)';
+
                 const row = document.createElement('tr');
-                // For non-admins, the secret is not sent. Handled this in the backend already.
-                console.log(station)
                 const secret = station.secret || 'N/A (Hidden)';
+                
                 row.innerHTML = `
                     <td>${station.id}</td>
                     <td>${station.station_id}</td>
-                    <td>${secret}</td> 
-                    <td>${station.user_id}</td>
-                    <td><button class="delete-station" data-id="${station.id}">Delete</button></td>
+                    <td class="secret-cell">${isAdmin ? secret : '***'}</td>
+                    <td>
+                        <input type="text" class="station-description" 
+                               data-id="${station.id}" 
+                               value="${station.description || ''}" 
+                               placeholder="Enter description">
+                    </td>
+                    <td>
+                        <input type="checkbox" class="station-public" 
+                               data-id="${station.id}" 
+                               ${station.is_public ? 'checked' : ''}>
+                    </td>
+                    <td>${lastSeenStr}</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>
+                        ${isAdmin ? `<button class="delete-station" data-id="${station.id}">Delete</button>` : ''}
+                        <button class="save-station" data-id="${station.id}">Save</button>
+                    </td>
                 `;
-                // Hide delete button for non-admins
-                if (!isAdmin) {
-                    row.querySelector('.delete-station').style.display = 'none';
-                }
                 stationsTableBody.appendChild(row);
+
+                const option = document.createElement('option');
+                option.value = station.id;
+                option.textContent = station.station_id;
+                messageStationSelect.appendChild(option);
             });
         } catch (error) {
             console.error("Failed to process stations response.", error);
         }
     }
-    
-    /**
-     * EVENT HANDLERS
-     */
+
+    async function loadStationMessages(stationId) {
+        if (!stationId) {
+            messagesContainer.style.display = 'none';
+            return;
+        }
+
+        const response = await apiRequest(`/api/user/stations/${stationId}/messages`);
+        if (!response || !response.ok) {
+            messagesTableBody.innerHTML = '<tr><td colspan="4">Failed to load messages</td></tr>';
+            return;
+        }
+
+        try {
+            const messages = await response.json();
+            messagesTableBody.innerHTML = '';
+            
+            if (messages.length === 0) {
+                messagesTableBody.innerHTML = '<tr><td colspan="4">No messages</td></tr>';
+            } else {
+                messages.forEach(msg => {
+                    const row = document.createElement('tr');
+                    const levelClass = msg.level === 'warning' ? 'level-warning' : 
+                                       msg.level === 'error' ? 'level-error' : 'level-info';
+                    const createdAt = new Date(msg.created_at).toLocaleString();
+                    row.innerHTML = `
+                        <td>${msg.id}</td>
+                        <td><span class="level-badge ${levelClass}">${msg.level}</span></td>
+                        <td>${msg.message || '(no message)'}</td>
+                        <td>${createdAt}</td>
+                    `;
+                    messagesTableBody.appendChild(row);
+                });
+            }
+            
+            const stationOption = messageStationSelect.querySelector(`option[value="${stationId}"]`);
+            selectedStationIdSpan.textContent = stationOption ? stationOption.textContent : stationId;
+            messagesContainer.style.display = 'block';
+        } catch (error) {
+            console.error("Failed to process messages response.", error);
+            messagesTableBody.innerHTML = '<tr><td colspan="4">Failed to load messages</td></tr>';
+        }
+    }
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -182,8 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await apiRequest('/api/login', 'POST', { username, password });
             
-            if (!response) return; // Error already handled in apiRequest
-            console.log(response)
+            if (!response) return;
             const data = await response.json();
             if (response.ok) {
                 localStorage.setItem('access_token', data.access_token);
@@ -193,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 loginMessage.style.color = 'red';
             }
         } catch (error) {
-            throw(error);
             loginMessage.textContent = 'An error occurred during login.';
             loginMessage.style.color = 'red';
         }
@@ -229,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (response && response.ok) {
             addStationForm.reset();
-            await loadStations(true);
+            await loadStations();
         } else {
             const data = response ? await response.json() : { msg: "Request failed" };
             alert(`Error: ${data.msg}`);
@@ -252,23 +314,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     stationsTableBody.addEventListener('click', async (e) => {
+        const stationId = e.target.dataset.id;
+        
         if (e.target.classList.contains('delete-station')) {
-            const stationId = e.target.dataset.id;
             if (confirm(`Are you sure you want to delete station ${stationId}?`)) {
                 const response = await apiRequest(`/api/admin/stations/${stationId}`, 'DELETE');
                 if (response && response.ok) {
-                    await loadStations(true);
+                    await loadStations();
                 } else {
                     const data = response ? await response.json() : { msg: "Request failed" };
                     alert(`Error: ${data.msg}`);
                 }
             }
+        } else if (e.target.classList.contains('save-station')) {
+            const row = e.target.closest('tr');
+            const description = row.querySelector('.station-description').value;
+            const isPublic = row.querySelector('.station-public').checked;
+
+            const response = await apiRequest(`/api/user/stations/${stationId}`, 'PUT', {
+                description: description,
+                is_public: isPublic
+            });
+            
+            if (response && response.ok) {
+                alert('Station updated successfully');
+            } else {
+                const data = response ? await response.json() : { msg: "Request failed" };
+                alert(`Error: ${data.msg}`);
+            }
         }
     });
 
-    /**
-     * INITIALIZATION
-     */
+    messageStationSelect.addEventListener('change', async (e) => {
+        const stationId = e.target.value;
+        await loadStationMessages(stationId);
+    });
+
     function init() {
         if (localStorage.getItem('access_token')) {
             showDashboard();
