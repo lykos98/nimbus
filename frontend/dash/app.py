@@ -110,6 +110,7 @@ def update_gauges(station, interval):
                                         ))
 
         res["_time"] = pd.to_datetime(res["_time"], unit="ms", utc="true")
+        res["_time"] = res["_time"].dt.tz_convert("Europe/Rome")
         dt = str((res["_time"].values[0])).split("T")
         date = dt[0]
         time = dt[1].split(".")[0]
@@ -142,6 +143,7 @@ def update_graph(station, start_date, end_date, interval, win):
             res = requests.get(f"{API_URL}/api/stations/{station}/data?start={t_start}&stop={t_stop}&win={win}")
             df = pd.DataFrame.from_dict(res.json()) 
             df["_time"] = pd.to_datetime(df["_time"], unit="ms", utc="true")
+            df["_time"] = df["_time"].dt.tz_convert("Europe/Rome")
 
         except:
             return html.Div("Cannot perform query"), html.Div() 
