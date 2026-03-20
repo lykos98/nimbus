@@ -3,12 +3,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const UNHEALTHY_THRESHOLD_MS = 12 * 60 * 1000;
     const REFRESH_INTERVAL = 60000;
+    const MAX_FIELDS_VISIBLE = 4;
 
     let currentUser = null;
     let isAdmin = false;
     let stations = [];
     let currentStationId = null;
     let refreshTimer = null;
+
+    const FIELD_CONFIG = {
+        'airTemperature': { name: 'Air Temp', unit: '°C' },
+        'airHumidity': { name: 'Humidity', unit: '%' },
+        'airPressure': { name: 'Pressure', unit: ' hPa' },
+        'batteryV': { name: 'Battery', unit: ' V' },
+        'solarV': { name: 'Solar', unit: ' V' },
+        'windSpeed': { name: 'Wind', unit: ' m/s' },
+        'windDirection': { name: 'Wind Dir', unit: '°' },
+        'rainmm': { name: 'Rain', unit: ' mm' },
+        'terrainTemperature': { name: 'Terrain Temp', unit: '°C' },
+        'terrainHumidity': { name: 'Terrain Humidity', unit: '%' },
+        'airCO2ppm': { name: 'CO2', unit: ' ppm' },
+        'airNOXppm': { name: 'NOX', unit: ' ppm' },
+        'waterTemperature': { name: 'Water Temp', unit: '°C' },
+        'waterHumidity': { name: 'Water Humidity', unit: '%' },
+        'waterPH': { name: 'Water pH', unit: '' },
+        'batteryA': { name: 'Battery A', unit: ' A' },
+        'solarA': { name: 'Solar A', unit: ' A' },
+        'RSSI': { name: 'RSSI', unit: ' dBm' }
+    };
+
+    const tryParseSensorData = (msgText) => {
+        if (!msgText) return { isSensorData: false, data: null };
+        try {
+            const parsed = JSON.parse(msgText);
+            if (typeof parsed === 'object' && parsed !== null) {
+                return { isSensorData: true, data: parsed };
+            }
+            return { isSensorData: false, data: msgText };
+        } catch {
+            return { isSensorData: false, data: msgText };
+        }
+    };
+
+    const formatSensorData = (data, maxFields = MAX_FIELDS_VISIBLE) => {
+        if (!data || typeof data !== 'object') return '';
+        
+        const entries = Object.entries(data);
+        if (entries.length === 0) return 'No sensor data';
+
+        const parts = [];
+        let hiddenParts = [];
+
+        entries.forEach(([key, value]) => {
+            const config = FIELD_CONFIG[key];
+            if (config && value !== null && value !== undefined) {
+                const displayValue = typeof value === 'number' ? value.toFixed(1) : value;
+                const formatted = `${config.name}: ${displayValue}${config.unit}`;
+                if (parts.length < maxFields) {
+                    parts.push(formatted);
+                } else {
+                    hiddenParts.push(formatted);
+                }
+            }
+        });
+
+        let result = parts.join(' | ') || JSON.stringify(data);
+        
+        if (hiddenParts.length > 0) {
+            result += ` <span class="sensor-more" onclick="this.style.display='none'; this.nextElementSibling.style.display='inline';">[+${hiddenParts.length} more]</span><span class="sensor-hidden" style="display:none;"> | ${hiddenParts.join(' | ')}</span>`;
+        }
+
+        return result;
+    };
 
     const apiRequest = async (endpoint, method = 'GET', body = null) => {
         const token = localStorage.getItem('access_token');
@@ -254,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 html += `<div class="feed-station-messages">`;
                 filteredMessages.slice(0, 5).forEach(msg => {
-                    html += renderMessageItem(msg, false);
+                    html += renderMessageItem(msg);
                 });
                 if (filteredMessages.length > 5) {
                     html += `<button class="btn btn-ghost btn-sm" onclick="viewStation(${station.id})" style="margin-top: 8px">
@@ -271,20 +337,32 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     };
 
-    const renderMessageItem = (msg, showStation = true) => {
-        const icons = { info: 'info', warning: 'alert-triangle', error: 'x-circle' };
+    const renderMessageItem = (msg) => {
+        const parsed = tryParseSensorData(msg.message);
+        let icon, iconClass, displayText, bgClass = '';
+        
+        if (parsed.isSensorData) {
+            icon = 'activity';
+            iconClass = 'info';
+            displayText = formatSensorData(parsed.data);
+        } else {
+            icon = msg.level === 'warning' ? 'alert-triangle' : 'x-circle';
+            iconClass = msg.level;
+            bgClass = msg.level === 'warning' ? 'warning-bg' : 'error-bg';
+            displayText = msg.message || 'Unknown message';
+        }
+        
         return `
-            <div class="message-item ${msg.level}">
-                <div class="message-icon ${msg.level}">
-                    <i data-lucide="${icons[msg.level] || 'info'}"></i>
+            <div class="message-item ${iconClass} ${bgClass}">
+                <div class="message-icon ${iconClass}">
+                    <i data-lucide="${icon}"></i>
                 </div>
                 <div class="message-content">
                     <div class="message-header">
-                        <span class="message-level ${msg.level}">${msg.level}</span>
+                        <span class="message-level ${iconClass}">${parsed.isSensorData ? 'Data' : msg.level}</span>
                         <span class="message-time" title="${formatDateTime(msg.created_at)}">${formatRelativeTime(msg.created_at)}</span>
                     </div>
-                    <div class="message-text">${msg.message || 'Data submission'}</div>
-                    ${showStation ? '' : ''}
+                    <div class="message-text">${displayText}</div>
                 </div>
             </div>
         `;
@@ -439,17 +517,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>`;
             } else {
                 allMessages.forEach(msg => {
+                    const parsed = tryParseSensorData(msg.message);
+                    let icon, iconClass, displayText, bgClass = '';
+                    
+                    if (parsed.isSensorData) {
+                        icon = 'activity';
+                        iconClass = 'info';
+                        displayText = formatSensorData(parsed.data, 3);
+                    } else {
+                        icon = msg.level === 'warning' ? 'alert-triangle' : 'x-circle';
+                        iconClass = msg.level;
+                        bgClass = msg.level === 'warning' ? 'warning-bg' : 'error-bg';
+                        displayText = msg.message || 'Unknown message';
+                    }
+                    
                     html += `
-                        <div class="message-item ${msg.level}">
-                            <div class="message-icon ${msg.level}">
-                                <i data-lucide="${msg.level === 'info' ? 'info' : msg.level === 'warning' ? 'alert-triangle' : 'x-circle'}"></i>
+                        <div class="message-item ${iconClass} ${bgClass}">
+                            <div class="message-icon ${iconClass}">
+                                <i data-lucide="${icon}"></i>
                             </div>
                             <div class="message-content">
                                 <div class="message-header">
-                                    <span class="message-level ${msg.level}">${msg.level}</span>
+                                    <span class="message-level ${iconClass}">${parsed.isSensorData ? 'Data' : msg.level}</span>
                                     <span class="message-time" title="${formatDateTime(msg.created_at)}">${formatRelativeTime(msg.created_at)}</span>
                                 </div>
-                                <div class="message-text">${msg.message || 'Data submission'}</div>
+                                <div class="message-text">${displayText}</div>
                                 <div class="message-station">${msg.station_id}</div>
                             </div>
                         </div>

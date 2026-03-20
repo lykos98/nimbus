@@ -669,6 +669,25 @@ body {
     background: var(--error-light);
 }
 
+.message-item.warning-bg {
+    background: var(--warning-light);
+}
+
+.message-item.error-bg {
+    background: var(--error-light);
+}
+
+.sensor-more {
+    color: var(--primary);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.sensor-hidden {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
 .message-icon {
     width: 36px;
     height: 36px;
