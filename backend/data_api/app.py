@@ -220,10 +220,16 @@ def get_df(station: str):
                 cur.execute("UPDATE stations SET last_seen = NOW() WHERE id = %s", (station_db_id,))
                 
                 if message:
-                    cur.execute("""
-                        INSERT INTO station_messages (station_id, message, level)
-                        VALUES (%s, %s, 'warning')
-                    """, (station_db_id, message))
+                    level = 'warning'
+                    msg_text = message
+                else:
+                    level = 'info'
+                    msg_text = 'Data submission'
+                
+                cur.execute("""
+                    INSERT INTO station_messages (station_id, message, level)
+                    VALUES (%s, %s, %s)
+                """, (station_db_id, msg_text, level))
                 
                 cur.execute("""
                     DELETE FROM station_messages 
