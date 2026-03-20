@@ -5,146 +5,320 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nimbus Admin Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Nimbus Admin Dashboard</h1>
-        
-        <!-- Login Form -->
-        <div id="login-section">
-            <h2>Login</h2>
-            <form id="login-form">
+    <!-- Login Page -->
+    <div id="login-page" class="login-page">
+        <div class="login-card">
+            <div class="login-logo">
+                <i data-lucide="cloud-rain"></i>
+                <h1>Nimbus</h1>
+                <p>Admin Dashboard</p>
+            </div>
+            <form id="login-form" class="login-form">
                 <div class="form-group">
-                    <label for="username">Username:</label>
-                    <input type="text" id="username" name="username" required>
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required placeholder="Enter username">
                 </div>
                 <div class="form-group">
-                    <label for="password">Password:</label>
-                    <input type="password" id="password" name="password" required>
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required placeholder="Enter password">
                 </div>
-                <button type="submit">Login</button>
-                <div id="login-message" class="message"></div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i data-lucide="log-in"></i>
+                    Sign In
+                </button>
+                <div id="login-message" class="message message-error"></div>
             </form>
         </div>
+    </div>
 
-        <!-- Dashboard Section (Hidden by default) -->
-        <div id="dashboard-section" style="display: none;">
-            <div class="dashboard-header">
-                <div>
-                    <h2 class="align-left">Welcome, <span id="current-username"></span>!</h2>
-                    <br>
-                    <h3 class="align-left">(User ID: <span id="current-userid"></span>)</h3>
-                </div>
-                <button id="logout-button">Logout</button>
+    <!-- Main Dashboard -->
+    <div id="dashboard-page" class="dashboard hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i data-lucide="cloud-rain"></i>
+                <span>Nimbus</span>
             </div>
-            <div id="dashboard-message" class="message"></div>
-
-            <!-- Profile Section -->
-            <div id="profile-section" class="management-section">
-                <h3>My Profile</h3>
-                <div class="profile-info">
-                    <p><strong>Username:</strong> <span id="profile-username"></span></p>
-                    <p><strong>Admin:</strong> <span id="profile-is-admin"></span></p>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-view="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav-item" data-view="stations">
+                    <i data-lucide="radio"></i>
+                    <span>Stations</span>
+                </button>
+                <button class="nav-item" data-view="messages">
+                    <i data-lucide="message-circle"></i>
+                    <span>Messages</span>
+                </button>
+                <button class="nav-item" data-view="users" id="nav-users">
+                    <i data-lucide="users"></i>
+                    <span>Users</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i data-lucide="user"></i>
+                    </div>
+                    <div class="user-details">
+                        <span id="current-username">User</span>
+                        <span id="current-user-role">User</span>
+                    </div>
                 </div>
+                <button id="logout-button" class="btn btn-ghost">
+                    <i data-lucide="log-out"></i>
+                    <span>Logout</span>
+                </button>
             </div>
+        </aside>
 
-            <!-- User Management (Admin Only) -->
-            <div id="user-management" class="management-section" style="display: none;">
-                <h3>User Management</h3>
-                <form id="add-user-form">
-                    <h4>Add New User</h4>
-                    <div class="form-group">
-                        <label for="new-username">Username:</label>
-                        <input type="text" id="new-username" required>
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view active">
+                <header class="view-header">
+                    <div class="header-title">
+                        <i data-lucide="layout-dashboard"></i>
+                        <h1>Activity Feed</h1>
                     </div>
-                    <div class="form-group">
-                        <label for="new-password">Password:</label>
-                        <input type="password" id="new-password" required>
+                    <button id="refresh-dashboard" class="btn btn-secondary">
+                        <i data-lucide="refresh-cw"></i>
+                        Refresh
+                    </button>
+                </header>
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Type</label>
+                        <select id="filter-type-dashboard" class="filter-select">
+                            <option value="all">All Types</option>
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
                     </div>
-                    <div class="form-group">
+                    <div class="filter-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="filter-unhealthy-dashboard" checked>
+                            <span>Show Unhealthy Stations</span>
+                        </label>
+                    </div>
+                </div>
+                <div id="dashboard-feed" class="feed-container">
+                    <div class="loading">
+                        <i data-lucide="loader-2" class="spin"></i>
+                        <span>Loading...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stations View -->
+            <section id="view-stations" class="view">
+                <header class="view-header">
+                    <div class="header-title">
+                        <i data-lucide="radio"></i>
+                        <h1>My Stations</h1>
+                    </div>
+                </header>
+                <div id="stations-grid" class="stations-grid">
+                    <div class="loading">
+                        <i data-lucide="loader-2" class="spin"></i>
+                        <span>Loading...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Station Detail View -->
+            <section id="view-station-detail" class="view">
+                <header class="view-header">
+                    <button id="back-to-stations" class="btn btn-ghost">
+                        <i data-lucide="arrow-left"></i>
+                        Back
+                    </button>
+                    <div class="header-title">
+                        <i data-lucide="radio"></i>
+                        <h1 id="station-detail-name">Station</h1>
+                    </div>
+                    <span id="station-detail-status" class="status-badge status-healthy">
+                        <i data-lucide="check-circle"></i>
+                        Healthy
+                    </span>
+                </header>
+                <div class="station-detail-info">
+                    <p id="station-detail-lastseen">Last seen: -</p>
+                    <div class="station-detail-form">
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label>Description</label>
+                                <input type="text" id="station-detail-description" placeholder="Station description">
+                            </div>
+                            <div class="form-group">
+                                <label>Public</label>
+                                <label class="toggle">
+                                    <input type="checkbox" id="station-detail-public">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <button id="save-station-detail" class="btn btn-primary">
+                                <i data-lucide="save"></i>
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Show</label>
+                        <select id="filter-messages-limit" class="filter-select">
+                            <option value="10">Last 10</option>
+                            <option value="25">Last 25</option>
+                            <option value="50">Last 50</option>
+                            <option value="100">Last 100</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="station-messages" class="messages-list">
+                    <div class="loading">
+                        <i data-lucide="loader-2" class="spin"></i>
+                        <span>Loading...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Messages View -->
+            <section id="view-messages" class="view">
+                <header class="view-header">
+                    <div class="header-title">
+                        <i data-lucide="message-circle"></i>
+                        <h1>All Messages</h1>
+                    </div>
+                    <button id="refresh-messages" class="btn btn-secondary">
+                        <i data-lucide="refresh-cw"></i>
+                        Refresh
+                    </button>
+                </header>
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Station</label>
+                        <select id="filter-station-messages" class="filter-select">
+                            <option value="all">All Stations</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Type</label>
+                        <select id="filter-type-messages" class="filter-select">
+                            <option value="all">All Types</option>
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="filter-unhealthy-messages">
+                            <span>Unhealthy Only</span>
+                        </label>
+                    </div>
+                </div>
+                <div id="all-messages" class="messages-list">
+                    <div class="loading">
+                        <i data-lucide="loader-2" class="spin"></i>
+                        <span>Loading...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users View (Admin Only) -->
+            <section id="view-users" class="view">
+                <header class="view-header">
+                    <div class="header-title">
+                        <i data-lucide="users"></i>
+                        <h1>User Management</h1>
+                    </div>
+                    <button id="add-user-btn" class="btn btn-primary">
+                        <i data-lucide="user-plus"></i>
+                        Add User
+                    </button>
+                </header>
+                <div id="users-list" class="users-list">
+                    <div class="loading">
+                        <i data-lucide="loader-2" class="spin"></i>
+                        <span>Loading...</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="modal-add-user" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New User</h2>
+                <button class="btn btn-ghost modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="add-user-form" class="modal-body">
+                <div class="form-group">
+                    <label for="new-username">Username</label>
+                    <input type="text" id="new-username" required placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label for="new-password">Password</label>
+                    <input type="password" id="new-password" required placeholder="Enter password">
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
                         <input type="checkbox" id="new-is-admin">
-                        <label for="new-is-admin">Is Admin</label>
-                    </div>
-                    <button type="submit">Add User</button>
-                    <div id="add-user-message" class="message"></div>
-                </form>
-
-                <h4>Existing Users</h4>
-                <table id="users-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Admin</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Station Management -->
-            <div id="station-management" class="management-section">
-                <h3>Station Management</h3>
-                <form id="add-station-form" style="display: none;">
-                    <h4>Add New Station</h4>
-                    <div class="form-group">
-                        <label for="new-station-id">Station ID:</label>
-                        <input type="text" id="new-station-id" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="station-user-id">Assign to User ID:</label>
-                        <input type="number" id="station-user-id" required>
-                    </div>
-                    <button type="submit">Add Station</button>
-                    <div id="add-station-message" class="message"></div>
-                </form>
-
-                <h4>My Stations</h4>
-                <table id="stations-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Station ID</th>
-                            <th>Secret</th>
-                            <th>Description</th>
-                            <th>Public</th>
-                            <th>Last Seen</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Message Queue Section -->
-            <div id="message-queue-section" class="management-section">
-                <h3>Station Message Queue</h3>
-                <p>Select a station to view its message queue:</p>
-                <select id="message-station-select">
-                    <option value="">-- Select Station --</option>
-                </select>
-                <div id="messages-container" style="display: none;">
-                    <h4>Messages for <span id="selected-station-id"></span></h4>
-                    <table id="messages-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Level</th>
-                                <th>Message</th>
-                                <th>Created At</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        </tbody>
-                    </table>
+                        <span>Admin User</span>
+                    </label>
                 </div>
-            </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost modal-close">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add User</button>
+                </div>
+            </form>
         </div>
     </div>
+
+    <!-- Add Station Modal -->
+    <div id="modal-add-station" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Station</h2>
+                <button class="btn btn-ghost modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="add-station-form" class="modal-body">
+                <div class="form-group">
+                    <label for="new-station-id">Station ID</label>
+                    <input type="text" id="new-station-id" required placeholder="e.g., station-001">
+                </div>
+                <div class="form-group">
+                    <label for="station-user-id">Assign to User ID</label>
+                    <input type="number" id="station-user-id" required placeholder="User ID">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost modal-close">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Station</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">
+        <span id="toast-message"></span>
+    </div>
+
     <script src="/static/js/main.js"></script>
 </body>
 </html>
