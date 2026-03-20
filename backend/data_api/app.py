@@ -196,6 +196,7 @@ def get_df(station: str):
             
             client = get_influx_db_client()
             write_api = client.write_api(write_options=SYNCHRONOUS)
+            app.logger.info(f" -> Recieved: {data_json}")
             
             point = Point("sensors")
             point.tag("stationId", data_json['stationId'])
