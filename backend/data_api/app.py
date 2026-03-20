@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify, g
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client import Point
 import os
+import json
 from datetime import timedelta, datetime 
 import psycopg2
 from psycopg2 import extras 
@@ -203,6 +204,9 @@ def get_df(station: str):
             
             message = data_json.pop("message", None)
             
+            sensor_data = {k: v for k, v in data_json.items() 
+                          if k != "stationId" and k in validFields and v is not None}
+            
             for k in data_json.keys(): 
                 if k != "stationId" and k in validFields:
                     point.field(k, float(data_json[k]))
@@ -224,7 +228,7 @@ def get_df(station: str):
                     msg_text = message
                 else:
                     level = 'info'
-                    msg_text = 'Data submission'
+                    msg_text = json.dumps(sensor_data)
                 
                 cur.execute("""
                     INSERT INTO station_messages (station_id, message, level)
