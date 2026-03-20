@@ -239,7 +239,6 @@ def get_df(station: str):
                 conn.commit()
             cur.close()
             
-            app.logger.info(f" -> Recieved: {data_json}")
             return jsonify({"status": "success"}), 201
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
