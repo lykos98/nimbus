@@ -133,6 +133,15 @@ def get_stations():
 def get_df(station: str):
     if request.method == "GET":
         try: 
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cur.execute("SELECT is_public FROM stations WHERE station_id = %s", (station,))
+            station_record = cur.fetchone()
+            cur.close()
+            
+            if not station_record or not station_record["is_public"]:
+                return jsonify({"error": "Cannot perform query"}), 400
+            
             start = request.args.get('start')
             stop  = request.args.get('stop')
             
@@ -256,6 +265,15 @@ def get_df(station: str):
 @app.route('/api/stations/<string:station>/last', methods=['GET'])
 def get_last(station):
     try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT is_public FROM stations WHERE station_id = %s", (station,))
+        station_record = cur.fetchone()
+        cur.close()
+        
+        if not station_record or not station_record["is_public"]:
+            return jsonify({"error": "Cannot perform query"}), 400
+        
         params = {"station": station,
                 "t_start": datetime.now() + timedelta(hours=-1),
                 "t_stop" : datetime.now()}
@@ -272,8 +290,9 @@ def get_last(station):
         api = client.query_api()
         res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params)
         return res.to_json(), 200
-    except:
-        return jsonify({"error" : "Cannot perform query"}), 400
+    except Exception as e:
+        app.logger.error(f"Error in GET /api/stations/.../last: {e}")
+        return jsonify({"error": "Cannot perform query"}), 400
 
 # Station Management Endpoints (Protected)
 @app.route("/api/admin/stations", methods=["GET", "POST"])

@@ -63,6 +63,10 @@ services:
   influxdb:
     image: influxdb:2.6-alpine
     container_name: nimbus_influxdb
+    ulimits:
+      nofile:
+        soft: 131072
+        hard: 131072
     ports:
       - "8086:8086"
     volumes:
