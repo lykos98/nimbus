@@ -260,7 +260,8 @@ def get_df(station: str):
             
             return jsonify({"status": "success"}), 201
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
+            app.logger.error(f"Error in POST /api/stations/{station_id_payload}/data: {e}")
+            return jsonify({"status": "error", "message": "Cannot perform data write"}), 400
 
 @app.route('/api/stations/<string:station>/last', methods=['GET'])
 def get_last(station):
