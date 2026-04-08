@@ -575,6 +575,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="user-card-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal(${user.id})">
+                        <i data-lucide="key"></i>
+                        Reset
+                    </button>
                     ${user.id !== currentUser.id ? `
                         <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">
                             <i data-lucide="trash-2"></i>
@@ -611,15 +615,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const addStation = async (stationId, userId) => {
-        const response = await apiRequest('/api/admin/stations', 'POST', { station_id: stationId, user_id: parseInt(userId) });
+    let allUsers = [];
+
+    const loadUsersForDropdown = async () => {
+        const response = await apiRequest('/api/admin/users');
+        if (!response || !response.ok) return;
+        allUsers = await response.json();
+        
+        const select = document.getElementById('station-user-select');
+        select.innerHTML = '<option value="">-- Select User --</option>';
+        allUsers.forEach(user => {
+            select.innerHTML += `<option value="${user.id}">${user.username}</option>`;
+        });
+    };
+
+    const addStation = async (stationId, userId = null) => {
+        let response;
+        if (isAdmin && userId) {
+            response = await apiRequest('/api/admin/stations', 'POST', { station_id: stationId, user_id: parseInt(userId) });
+        } else {
+            response = await apiRequest('/api/user/stations', 'POST', { station_id: stationId });
+        }
+        
         if (response && response.ok) {
-            showToast('Station added successfully', 'success');
+            const data = await response.json();
+            showToast(`Station added! Secret: ${data.secret}`, 'success');
             await loadStations();
             closeModal('modal-add-station');
+            document.getElementById('add-station-form').reset();
         } else {
             const data = response ? await response.json() : {};
             showToast(data.msg || 'Failed to add station', 'error');
+        }
+    };
+
+    const resetUserPassword = async (userId, newPassword) => {
+        const response = await apiRequest(`/api/admin/users/${userId}/reset-password`, 'PUT', { new_password: newPassword });
+        if (response && response.ok) {
+            showToast('Password reset successfully', 'success');
+            closeModal('modal-reset-password');
+        } else {
+            const data = response ? await response.json() : {};
+            showToast(data.msg || 'Failed to reset password', 'error');
         }
     };
 
@@ -694,6 +731,96 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('new-password').value;
         const isAdminUser = document.getElementById('new-is-admin').checked;
         addUser(username, password, isAdminUser);
+        e.target.reset();
+    });
+
+    document.getElementById('add-station-btn').addEventListener('click', async () => {
+        if (isAdmin) {
+            await loadUsersForDropdown();
+            document.getElementById('station-user-select-group').style.display = 'block';
+        } else {
+            document.getElementById('station-user-select-group').style.display = 'none';
+        }
+        openModal('modal-add-station');
+    });
+
+    document.getElementById('add-station-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const stationId = document.getElementById('new-station-id').value;
+        const userId = document.getElementById('station-user-select').value;
+        
+        if (stationId.length > 32) {
+            showToast('Station ID must be max 32 characters', 'error');
+            return;
+        }
+        
+        if (isAdmin && userId) {
+            addStation(stationId, userId);
+        } else {
+            addStation(stationId, null);
+        }
+    });
+
+    document.getElementById('reset-password-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const userId = document.getElementById('reset-user-id').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        
+        if (newPassword !== confirmPassword) {
+            showToast('Passwords do not match', 'error');
+            return;
+        }
+        
+        if (newPassword.length < 1) {
+            showToast('Password cannot be empty', 'error');
+            return;
+        }
+        
+        resetUserPassword(parseInt(userId), newPassword);
+        e.target.reset();
+    });
+
+    window.openResetPasswordModal = (userId) => {
+        document.getElementById('reset-user-id').value = userId;
+        openModal('modal-reset-password');
+    };
+
+    const changeUserPassword = async (currentPassword, newPassword) => {
+        const response = await apiRequest('/api/user/change-password', 'PUT', {
+            current_password: currentPassword,
+            new_password: newPassword
+        });
+        if (response && response.ok) {
+            showToast('Password changed successfully', 'success');
+            closeModal('modal-change-password');
+        } else {
+            const data = response ? await response.json() : {};
+            showToast(data.msg || 'Failed to change password', 'error');
+        }
+    };
+
+    document.getElementById('change-password-btn').addEventListener('click', () => {
+        openModal('modal-change-password');
+    });
+
+    document.getElementById('change-password-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('user-new-password').value;
+        const confirmPassword = document.getElementById('user-confirm-password').value;
+        
+        if (newPassword !== confirmPassword) {
+            showToast('Passwords do not match', 'error');
+            return;
+        }
+        
+        if (newPassword.length < 1) {
+            showToast('Password cannot be empty', 'error');
+            return;
+        }
+        
+        changeUserPassword(currentPassword, newPassword);
         e.target.reset();
     });
 

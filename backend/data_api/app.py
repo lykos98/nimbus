@@ -115,6 +115,34 @@ def profile():
     return jsonify(dict(user)), 200
 
 
+@app.route("/api/user/change-password", methods=["PUT"])
+@jwt_required()
+def change_user_password():
+    current_user_id = get_jwt_identity()
+    current_password = request.json.get("current_password")
+    new_password = request.json.get("new_password")
+    
+    if not current_password or not new_password:
+        return jsonify({"msg": "Current and new password required"}), 400
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("SELECT password_hash FROM users WHERE id = %s", (int(current_user_id),))
+    user = cur.fetchone()
+    
+    if not user or not check_password_hash(user["password_hash"], current_password):
+        cur.close()
+        return jsonify({"msg": "Current password is incorrect"}), 401
+    
+    hashed = generate_password_hash(new_password)
+    cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hashed, int(current_user_id)))
+    conn.commit()
+    cur.close()
+    
+    return jsonify({"msg": "Password changed successfully"}), 200
+
+
 @app.route('/api/stations', methods=['GET'])
 def get_stations():
     try:
@@ -382,6 +410,47 @@ def user_stations():
     return jsonify([dict(s) for s in stations]), 200
 
 
+@app.route("/api/user/stations", methods=["POST"])
+@jwt_required()
+def create_user_station():
+    current_user_id = get_jwt_identity()
+    station_id = request.json.get("station_id", None)
+    
+    if not station_id:
+        return jsonify({"msg": "station_id is required"}), 400
+    
+    if len(station_id) > 32:
+        return jsonify({"msg": "station_id must be max 32 characters"}), 400
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("SELECT id FROM users WHERE id = %s", (int(current_user_id),))
+    if not cur.fetchone():
+        cur.close()
+        return jsonify({"msg": "User not found"}), 404
+    
+    secret = os.urandom(16).hex()
+    
+    try:
+        cur.execute("""
+            INSERT INTO stations (station_id, secret, user_id, is_public)
+            VALUES (%s, %s, %s, FALSE) RETURNING id
+        """, (station_id, secret, int(current_user_id)))
+        new_station_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        return jsonify({"id": new_station_id, "station_id": station_id, "secret": secret, "user_id": int(current_user_id), "is_public": False}), 201
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        cur.close()
+        return jsonify({"msg": "Station ID already exists"}), 400
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        return jsonify({"msg": str(e)}), 500
+
+
 @app.route("/api/user/stations/<int:station_id>", methods=["PUT"])
 @jwt_required()
 def update_user_station(station_id):
@@ -571,6 +640,42 @@ def admin_user_detail_management(user_id):
         if rows_deleted == 0:
             return jsonify({"msg": "User not found"}), 404
         return jsonify({"msg": "User deleted successfully"}), 200
+
+
+@app.route("/api/admin/users/<int:user_id>/reset-password", methods=["PUT"])
+@jwt_required()
+def admin_reset_user_password(user_id):
+    current_user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("SELECT is_admin FROM users WHERE id = %s", (int(current_user_id),))
+    current_user = cur.fetchone()
+    
+    if not current_user or not current_user["is_admin"]:
+        cur.close()
+        return jsonify({"msg": "Administration access required"}), 403
+    
+    new_password = request.json.get("new_password", None)
+    if not new_password:
+        cur.close()
+        return jsonify({"msg": "new_password is required"}), 400
+    
+    hashed_password = generate_password_hash(new_password)
+    
+    try:
+        cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hashed_password, user_id))
+        conn.commit()
+        rows_updated = cur.rowcount
+        cur.close()
+        if rows_updated == 0:
+            return jsonify({"msg": "User not found"}), 404
+        return jsonify({"msg": "Password reset successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        return jsonify({"msg": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=False, port=5555) # In production, set debug=False and use a WSGI server

@@ -70,6 +70,10 @@
                         <span id="current-user-role">User</span>
                     </div>
                 </div>
+                <button id="change-password-btn" class="btn btn-ghost">
+                    <i data-lucide="key"></i>
+                    <span>Change Password</span>
+                </button>
                 <button id="logout-button" class="btn btn-ghost">
                     <i data-lucide="log-out"></i>
                     <span>Logout</span>
@@ -123,6 +127,10 @@
                         <i data-lucide="radio"></i>
                         <h1>My Stations</h1>
                     </div>
+                    <button id="add-station-btn" class="btn btn-primary">
+                        <i data-lucide="plus"></i>
+                        Add Station
+                    </button>
                 </header>
                 <div id="stations-grid" class="stations-grid">
                     <div class="loading">
@@ -287,6 +295,37 @@
         </div>
     </div>
 
+    <!-- Reset Password Modal -->
+    <div id="modal-reset-password" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Reset User Password</h2>
+                <button class="btn btn-ghost modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="reset-password-form" class="modal-body">
+                <div class="form-group">
+                    <label for="reset-user-id">User ID</label>
+                    <input type="text" id="reset-user-id" disabled>
+                </div>
+                <div class="form-group">
+                    <label for="new-password">New Password</label>
+                    <input type="password" id="new-password" required placeholder="Enter new password">
+                </div>
+                <div class="form-group">
+                    <label for="confirm-password">Confirm Password</label>
+                    <input type="password" id="confirm-password" required placeholder="Confirm new password">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost modal-close">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Reset Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Add Station Modal -->
     <div id="modal-add-station" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -300,15 +339,48 @@
             <form id="add-station-form" class="modal-body">
                 <div class="form-group">
                     <label for="new-station-id">Station ID</label>
-                    <input type="text" id="new-station-id" required placeholder="e.g., station-001">
+                    <input type="text" id="new-station-id" required maxlength="32" placeholder="e.g., station-001 (max 32 chars)">
                 </div>
-                <div class="form-group">
-                    <label for="station-user-id">Assign to User ID</label>
-                    <input type="number" id="station-user-id" required placeholder="User ID">
+                <div class="form-group" id="station-user-select-group" style="display: none;">
+                    <label for="station-user-select">Assign to User</label>
+                    <select id="station-user-select" required>
+                        <option value="">-- Select User --</option>
+                    </select>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost modal-close">Cancel</button>
                     <button type="submit" class="btn btn-primary">Add Station</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal (User) -->
+    <div id="modal-change-password" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Change My Password</h2>
+                <button class="btn btn-ghost modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="change-password-form" class="modal-body">
+                <div class="form-group">
+                    <label for="current-password">Current Password</label>
+                    <input type="password" id="current-password" required placeholder="Enter current password">
+                </div>
+                <div class="form-group">
+                    <label for="user-new-password">New Password</label>
+                    <input type="password" id="user-new-password" required placeholder="Enter new password">
+                </div>
+                <div class="form-group">
+                    <label for="user-confirm-password">Confirm New Password</label>
+                    <input type="password" id="user-confirm-password" required placeholder="Confirm new password">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost modal-close">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Change Password</button>
                 </div>
             </form>
         </div>
