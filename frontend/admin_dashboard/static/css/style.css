@@ -1003,3 +1003,20 @@ body {
         flex-direction: column;
     }
 }
+
+.secret-display {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.secret-input {
+    font-family: monospace;
+    background: var(--bg);
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--text-secondary);
+    width: 100%;
+}

@@ -377,6 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('station-detail-name').textContent = station.station_id;
         document.getElementById('station-detail-lastseen').textContent = `Last seen: ${formatRelativeTime(station.last_seen)}`;
+        document.getElementById('station-detail-secret').value = station.secret || 'N/A';
         document.getElementById('station-detail-description').value = station.description || '';
         document.getElementById('station-detail-public').checked = station.is_public;
         
@@ -387,6 +388,14 @@ document.addEventListener('DOMContentLoaded', () => {
         showView('station-detail');
         loadStationMessages();
         lucide.createIcons();
+    };
+
+    window.copySecret = () => {
+        const secret = document.getElementById('station-detail-secret').value;
+        if (secret && secret !== 'N/A') {
+            navigator.clipboard.writeText(secret);
+            showToast('Secret copied to clipboard', 'success');
+        }
     };
 
     const loadStationMessages = async () => {
