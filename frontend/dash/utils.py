@@ -1,4 +1,12 @@
-allowed_meausures = ['airTemperature', 'airHumidity', 'airPressure', 'batteryV', 'solarV', 'windSpeed', 'windDirection']
+allowed_meausures = ['airTemperature', 'airHumidity', 'airPressure', 'batteryV', 'solarV', 'windSpeed', 'windDirection', 'terrainHumidity']
+validFields = [
+            "airTemperature", "airHumidity", "airPressure", "airCO2ppm", "airNOXppm",
+            "windDirection", "windSpeed",
+            "rainmm",
+            "terrainTemperature", "terrainHumidity", "terrainPH",
+            "waterTemperature", "waterHumidity", "waterPH",
+            "batteryV", "batteryA", "solarV", "solarA"
+            ]
 column_ignore = ['table', 'result', '_start', '_stop', '_time', '_measurement', 'stationId', 'RSSI']
 icons = {
         'airTemperature' : 'assets/temp.svg',
@@ -7,7 +15,8 @@ icons = {
         'airPressure'    : 'assets/press.png',
         'airHumidity'    : 'assets/hum.png',
         'windSpeed'      : 'assets/wind_speed.png',
-        'windDirection'  : 'assets/wind_dir.png'
+        'windDirection'  : 'assets/wind_dir.png',
+        'terrainHumidity': 'assets/terrainhum.png'
         }
 
 measures_colors = {
@@ -18,6 +27,7 @@ measures_colors = {
         'airHumidity'    : {'line_color' : "rgb(76,120,168)", "fillcolor" : "rgba(76,120,168,0.25)"},
         'windSpeed'      : {'line_color' : "rgb(76,120,168)", "fillcolor" : "rgba(76,120,168,0.25)"},
         'windDirection'  : {'line_color' : "rgb(255,161,90)", "fillcolor" : "rgba(255,161,90,0.25)"},
+        'terrainHumidity': {'line_color' : "rgb(139, 69, 19)", "fillcolor": "rgba(139, 69, 19, 0.25)"},
 }
 
 measures_names = {
@@ -27,7 +37,8 @@ measures_names = {
         'airPressure'    : "Air Pressure",
         'airHumidity'    : "Air Humidity", 
         'windSpeed'      : "Wind Speed",
-        'windDirection'  : "Wind Direction"
+        'windDirection'  : "Wind Direction",
+        'terrainHumidity': "Terrain Humidity"
 }
 
 measures_units = {
@@ -37,7 +48,8 @@ measures_units = {
         'airPressure'    : "hPa",
         'airHumidity'    : "%",
         'windSpeed'      : "m/s",
-        'windDirection'  : "°"
+        'windDirection'  : "°",
+        'terrainHumidity': "%"
 }
 
 title_font_settings = {'size' : 20, 'weight' : 'bold'}
@@ -50,8 +62,8 @@ layout = {
         'airPressure'    : {'title' : 'Pressure', 'font' : axis_font_settings, 'title_font' : title_font_settings},
         'airHumidity'    : {'title' : 'Humidity', 'font' : axis_font_settings, 'title_font' : title_font_settings},
         'windSpeed'      : {'title' : 'Wind Speed', 'font' : axis_font_settings, 'title_font' : title_font_settings},
-        'windDirection'  : {'title' : 'Wind Direction', 'font' : axis_font_settings, 'title_font' : title_font_settings}
-
+        'windDirection'  : {'title' : 'Wind Direction', 'font' : axis_font_settings, 'title_font' : title_font_settings},
+        'terrainHumidity': {'title' : 'Terrain Humidity', 'font' : axis_font_settings, 'title_font' : title_font_settings}
         }
 windows = {
         "None"    : "",
