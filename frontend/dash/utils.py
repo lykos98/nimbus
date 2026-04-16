@@ -16,7 +16,7 @@ icons = {
         'airHumidity'    : 'assets/hum.png',
         'windSpeed'      : 'assets/wind_speed.png',
         'windDirection'  : 'assets/wind_dir.png',
-        'terrainHumidity': 'assets/terrainhum.png'
+        'terrainHumidity': 'assets/terrainhum.svg'
         }
 
 measures_colors = {
