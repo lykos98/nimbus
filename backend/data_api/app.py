@@ -37,20 +37,6 @@ if __name__ != '__main__':
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") 
 jwt_manager = JWTManager(app)
 
-@app.before_request
-def log_jwt_info():
-    """Diagnostic logging to inspect JWT identity."""
-    if 'Authorization' in request.headers:
-        auth_header = request.headers['Authorization']
-        if auth_header.startswith('Bearer '):
-            token = auth_header.split()[1]
-            try:
-                # Decode without verification to inspect payload
-                decoded_token = jwt.decode(token, options={"verify_signature": False})
-                app.logger.info(f"Incoming JWT 'sub' (identity): {decoded_token.get('sub')}")
-            except Exception as e:
-                app.logger.error(f"Could not decode JWT for logging: {e}")
-
 def get_db_connection():
     if "db_conn" not in g:
         g.db_conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASSWORD)
