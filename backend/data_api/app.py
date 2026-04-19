@@ -159,8 +159,11 @@ def get_df(station: str):
             start = request.args.get('start')
             stop  = request.args.get('stop')
             
-            start = datetime.fromisoformat(start)
-            stop  = datetime.fromisoformat(stop)
+            try:
+                start = datetime.fromisoformat(start)
+                stop  = datetime.fromisoformat(stop)
+            except:
+                return jsonify({"error": "Invalid date format"}), 400
 
             if "win" not in request.args:
                 win = "None"
