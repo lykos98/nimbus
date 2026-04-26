@@ -63,14 +63,30 @@ services:
   influxdb:
     image: influxdb:2.6-alpine
     container_name: nimbus_influxdb
+    ulimits:
+      nofile:
+        soft: 131072
+        hard: 131072
+    sysctls:
+      - fs.file-max=131072
+    deploy:
+      resources:
+        limits:
+          memory: 2g
     ports:
       - "8086:8086"
     volumes:
       - ${INFLUX_DATA_PATH}:/var/lib/influxdb2:rw
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - nimbus-network
     restart: unless-stopped
-  
+
   dash:
     build:
       context: ./frontend

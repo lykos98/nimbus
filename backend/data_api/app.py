@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify, g
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client import Point
 import os
+import json
 from datetime import timedelta, datetime 
 import psycopg2
 from psycopg2 import extras 
@@ -35,20 +36,6 @@ if __name__ != '__main__':
 # JWT Configuration
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") 
 jwt_manager = JWTManager(app)
-
-@app.before_request
-def log_jwt_info():
-    """Diagnostic logging to inspect JWT identity."""
-    if 'Authorization' in request.headers:
-        auth_header = request.headers['Authorization']
-        if auth_header.startswith('Bearer '):
-            token = auth_header.split()[1]
-            try:
-                # Decode without verification to inspect payload
-                decoded_token = jwt.decode(token, options={"verify_signature": False})
-                app.logger.info(f"Incoming JWT 'sub' (identity): {decoded_token.get('sub')}")
-            except Exception as e:
-                app.logger.error(f"Could not decode JWT for logging: {e}")
 
 def get_db_connection():
     if "db_conn" not in g:
@@ -114,45 +101,69 @@ def profile():
     return jsonify(dict(user)), 200
 
 
+@app.route("/api/user/change-password", methods=["PUT"])
+@jwt_required()
+def change_user_password():
+    current_user_id = get_jwt_identity()
+    current_password = request.json.get("current_password")
+    new_password = request.json.get("new_password")
+    
+    if not current_password or not new_password:
+        return jsonify({"msg": "Current and new password required"}), 400
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("SELECT password_hash FROM users WHERE id = %s", (int(current_user_id),))
+    user = cur.fetchone()
+    
+    if not user or not check_password_hash(user["password_hash"], current_password):
+        cur.close()
+        return jsonify({"msg": "Current password is incorrect"}), 401
+    
+    hashed = generate_password_hash(new_password)
+    cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hashed, int(current_user_id)))
+    conn.commit()
+    cur.close()
+    
+    return jsonify({"msg": "Password changed successfully"}), 200
+
+
 @app.route('/api/stations', methods=['GET'])
 def get_stations():
-
-    query = ''' import "influxdata/influxdb/schema"
-                schema.tagValues(bucket: "t2", tag: "stationId", start: t_start, stop: t_end) 
-            ''' 
     try:
-        if request.args.get('start'):
-            start = datetime.fromisoformat(request.args.get('start'))
-        else:
-            start = datetime.now() + timedelta(days = -1) 
-
-        if request.args.get('end'):
-            end = datetime.fromisoformat(request.args.get('end'))
-        else:
-            end = datetime.now()
-
-
-        client = get_influx_db_client()
-        api = client.query_api()
-
-        params = {"t_start": start, "t_end": end}
-        res = api.query_csv(org = INFLUX_ORG, query = query, params = params)
-        stations = [r[-1] for r in res if r[-2] == '0']
-
-        return jsonify(stations)
-    except:
-        return jsonify({"error" : "Cannot perform query"}), 400
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT station_id FROM stations WHERE is_public = TRUE")
+        stations = cur.fetchall()
+        cur.close()
+        return jsonify([s["station_id"] for s in stations])
+    except Exception as e:
+        app.logger.error(f"Error fetching public stations: {e}")
+        return jsonify({"error": "Cannot perform query"}), 400
         
 
 @app.route('/api/stations/<string:station>/data', methods=['GET', 'POST'])
 def get_df(station: str):
     if request.method == "GET":
         try: 
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cur.execute("SELECT is_public FROM stations WHERE station_id = %s", (station,))
+            station_record = cur.fetchone()
+            cur.close()
+            
+            if not station_record or not station_record["is_public"]:
+                return jsonify({"error": "Cannot perform query"}), 400
+            
             start = request.args.get('start')
             stop  = request.args.get('stop')
             
-            start = datetime.fromisoformat(start)
-            stop  = datetime.fromisoformat(stop)
+            try:
+                start = datetime.fromisoformat(start)
+                stop  = datetime.fromisoformat(stop)
+            except:
+                return jsonify({"error": "Invalid date format"}), 400
 
             if "win" not in request.args:
                 win = "None"
@@ -212,9 +223,15 @@ def get_df(station: str):
             
             client = get_influx_db_client()
             write_api = client.write_api(write_options=SYNCHRONOUS)
+            app.logger.info(f" -> Recieved: {data_json}")
             
             point = Point("sensors")
             point.tag("stationId", data_json['stationId'])
+            
+            message = data_json.pop("message", None)
+            
+            sensor_data = {k: v for k, v in data_json.items() 
+                          if k != "stationId" and k in validFields and v is not None}
             
             for k in data_json.keys(): 
                 if k != "stationId" and k in validFields:
@@ -222,15 +239,59 @@ def get_df(station: str):
             
             point.time(datetime.now())
             write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
-            app.logger.info(f" -> Recieved: {data_json}")
-            #print(f"LOG -> Recieved: {data_json}", file=sys.stderr)
+            
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            
+            cur.execute("SELECT id FROM stations WHERE station_id = %s", (station_id_payload,))
+            station_row = cur.fetchone()
+            if station_row:
+                station_db_id = station_row["id"]
+                cur.execute("UPDATE stations SET last_seen = NOW() WHERE id = %s", (station_db_id,))
+                
+                if message:
+                    level = 'warning'
+                    msg_text = message
+                else:
+                    level = 'info'
+                    msg_text = json.dumps(sensor_data)
+                
+                cur.execute("""
+                    INSERT INTO station_messages (station_id, message, level)
+                    VALUES (%s, %s, %s)
+                """, (station_db_id, msg_text, level))
+                
+                cur.execute("""
+                    DELETE FROM station_messages 
+                    WHERE station_id = %s 
+                    AND id NOT IN (
+                        SELECT id FROM station_messages 
+                        WHERE station_id = %s 
+                        ORDER BY created_at DESC 
+                        LIMIT 100
+                    )
+                """, (station_db_id, station_db_id))
+                
+                conn.commit()
+            cur.close()
+            
             return jsonify({"status": "success"}), 201
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
+            app.logger.error(f"Error in POST {request.path}: {e}")
+            return jsonify({"status": "error", "message": "Cannot perform data write"}), 400
 
 @app.route('/api/stations/<string:station>/last', methods=['GET'])
 def get_last(station):
     try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT is_public FROM stations WHERE station_id = %s", (station,))
+        station_record = cur.fetchone()
+        cur.close()
+        
+        if not station_record or not station_record["is_public"]:
+            return jsonify({"error": "Cannot perform query"}), 400
+        
         params = {"station": station,
                 "t_start": datetime.now() + timedelta(hours=-1),
                 "t_stop" : datetime.now()}
@@ -247,8 +308,9 @@ def get_last(station):
         api = client.query_api()
         res = api.query_data_frame(org = INFLUX_ORG, query = query, params = params)
         return res.to_json(), 200
-    except:
-        return jsonify({"error" : "Cannot perform query"}), 400
+    except Exception as e:
+        app.logger.error(f"Error in GET /api/stations/.../last: {e}")
+        return jsonify({"error": "Cannot perform query"}), 400
 
 # Station Management Endpoints (Protected)
 @app.route("/api/admin/stations", methods=["GET", "POST"])
@@ -266,7 +328,7 @@ def admin_stations_management():
         return jsonify({"msg": "Administration access required"}), 403
 
     if request.method == "GET":
-        cur.execute("SELECT id, station_id, user_id, secret FROM stations")
+        cur.execute("SELECT id, station_id, user_id, secret, description, is_public, last_seen FROM stations")
         stations = cur.fetchall()
         cur.close()
         return jsonify([dict(s) for s in stations]), 200
@@ -328,13 +390,141 @@ def user_stations():
         return jsonify({"msg": "User not found"}), 404
 
     if current_user["is_admin"]:
-        cur.execute("SELECT id, station_id, user_id, secret FROM stations")
+        cur.execute("SELECT id, station_id, user_id, secret, description, is_public, last_seen FROM stations")
     else:
-        cur.execute("SELECT id, station_id, user_id, secret FROM stations WHERE user_id = %s", (current_user["id"],))
+        cur.execute("SELECT id, station_id, user_id, secret, description, is_public, last_seen FROM stations WHERE user_id = %s", (current_user["id"],))
     
     stations = cur.fetchall()
     cur.close()
     return jsonify([dict(s) for s in stations]), 200
+
+
+@app.route("/api/user/stations", methods=["POST"])
+@jwt_required()
+def create_user_station():
+    current_user_id = get_jwt_identity()
+    station_id = request.json.get("station_id", None)
+    
+    if not station_id:
+        return jsonify({"msg": "station_id is required"}), 400
+    
+    if len(station_id) > 32:
+        return jsonify({"msg": "station_id must be max 32 characters"}), 400
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("SELECT id FROM users WHERE id = %s", (int(current_user_id),))
+    if not cur.fetchone():
+        cur.close()
+        return jsonify({"msg": "User not found"}), 404
+    
+    secret = os.urandom(16).hex()
+    
+    try:
+        cur.execute("""
+            INSERT INTO stations (station_id, secret, user_id, is_public)
+            VALUES (%s, %s, %s, FALSE) RETURNING id
+        """, (station_id, secret, int(current_user_id)))
+        new_station_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        return jsonify({"id": new_station_id, "station_id": station_id, "secret": secret, "user_id": int(current_user_id), "is_public": False}), 201
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        cur.close()
+        return jsonify({"msg": "Station ID already exists"}), 400
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        return jsonify({"msg": str(e)}), 500
+
+
+@app.route("/api/user/stations/<int:station_id>", methods=["PUT"])
+@jwt_required()
+def update_user_station(station_id):
+    current_user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT * FROM users WHERE id = %s", (int(current_user_id),))
+    current_user = cur.fetchone()
+    if not current_user:
+        cur.close()
+        return jsonify({"msg": "User not found"}), 404
+
+    cur.execute("SELECT * FROM stations WHERE id = %s", (station_id,))
+    station = cur.fetchone()
+    if not station:
+        cur.close()
+        return jsonify({"msg": "Station not found"}), 404
+
+    if not current_user["is_admin"] and station["user_id"] != int(current_user_id):
+        cur.close()
+        return jsonify({"msg": "Unauthorized"}), 403
+
+    description = request.json.get("description")
+    is_public = request.json.get("is_public")
+
+    updates = []
+    params = []
+    if description is not None:
+        updates.append("description = %s")
+        params.append(description)
+    if is_public is not None:
+        updates.append("is_public = %s")
+        params.append(is_public)
+
+    if not updates:
+        cur.close()
+        return jsonify({"msg": "No fields to update"}), 400
+
+    params.append(station_id)
+    update_query = f"UPDATE stations SET {', '.join(updates)} WHERE id = %s"
+    try:
+        cur.execute(update_query, tuple(params))
+        conn.commit()
+        cur.close()
+        return jsonify({"msg": "Station updated successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        return jsonify({"msg": str(e)}), 500
+
+
+@app.route("/api/user/stations/<int:station_id>/messages", methods=["GET"])
+@jwt_required()
+def get_user_station_messages(station_id):
+    current_user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    cur.execute("SELECT * FROM users WHERE id = %s", (int(current_user_id),))
+    current_user = cur.fetchone()
+    if not current_user:
+        cur.close()
+        return jsonify({"msg": "User not found"}), 404
+
+    cur.execute("SELECT * FROM stations WHERE id = %s", (station_id,))
+    station = cur.fetchone()
+    if not station:
+        cur.close()
+        return jsonify({"msg": "Station not found"}), 404
+
+    if not current_user["is_admin"] and station["user_id"] != int(current_user_id):
+        cur.close()
+        return jsonify({"msg": "Unauthorized"}), 403
+
+    cur.execute("""
+        SELECT id, station_id, message, level, created_at 
+        FROM station_messages 
+        WHERE station_id = %s 
+        ORDER BY created_at DESC 
+        LIMIT 100
+    """, (station_id,))
+    messages = cur.fetchall()
+    cur.close()
+    return jsonify([dict(m) for m in messages]), 200
 
 # User Management Endpoints (Admin Only)
 @app.route("/api/admin/users", methods=["GET", "POST"])
@@ -439,6 +629,42 @@ def admin_user_detail_management(user_id):
         if rows_deleted == 0:
             return jsonify({"msg": "User not found"}), 404
         return jsonify({"msg": "User deleted successfully"}), 200
+
+
+@app.route("/api/admin/users/<int:user_id>/reset-password", methods=["PUT"])
+@jwt_required()
+def admin_reset_user_password(user_id):
+    current_user_id = get_jwt_identity()
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    cur.execute("SELECT is_admin FROM users WHERE id = %s", (int(current_user_id),))
+    current_user = cur.fetchone()
+    
+    if not current_user or not current_user["is_admin"]:
+        cur.close()
+        return jsonify({"msg": "Administration access required"}), 403
+    
+    new_password = request.json.get("new_password", None)
+    if not new_password:
+        cur.close()
+        return jsonify({"msg": "new_password is required"}), 400
+    
+    hashed_password = generate_password_hash(new_password)
+    
+    try:
+        cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hashed_password, user_id))
+        conn.commit()
+        rows_updated = cur.rowcount
+        cur.close()
+        if rows_updated == 0:
+            return jsonify({"msg": "User not found"}), 404
+        return jsonify({"msg": "Password reset successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        return jsonify({"msg": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=False, port=5555) # In production, set debug=False and use a WSGI server

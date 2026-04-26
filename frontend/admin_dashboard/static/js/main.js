@@ -1,281 +1,853 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const loginSection = document.getElementById('login-section');
-    const dashboardSection = document.getElementById('dashboard-section');
-    
-    const loginForm = document.getElementById('login-form');
-    const loginMessage = document.getElementById('login-message');
+    lucide.createIcons();
 
-    const dashboardMessage = document.getElementById('dashboard-message');
-    const currentUserSpan = document.getElementById('current-username');
-    const currentUserIdSpan = document.getElementById('current-userid');
-    const logoutButton = document.getElementById('logout-button');
+    const UNHEALTHY_THRESHOLD_MS = 12 * 60 * 1000;
+    const REFRESH_INTERVAL = 60000;
+    const MAX_FIELDS_VISIBLE = 4;
 
-    const userManagementSection = document.getElementById('user-management');
-    
-    const addUserForm = document.getElementById('add-user-form');
-    const usersTableBody = document.querySelector('#users-table tbody');
-    
-    const addStationForm = document.getElementById('add-station-form');
-    const stationsTableBody = document.querySelector('#stations-table tbody');
+    let currentUser = null;
+    let isAdmin = false;
+    let stations = [];
+    let currentStationId = null;
+    let refreshTimer = null;
 
-    const API_URL = ""; // The UI is served from the same origin as the API
-    let currentUser = null; // Store current user profile
+    const FIELD_CONFIG = {
+        'airTemperature': { name: 'Air Temp', unit: '°C' },
+        'airHumidity': { name: 'Humidity', unit: '%' },
+        'airPressure': { name: 'Pressure', unit: ' hPa' },
+        'batteryV': { name: 'Battery', unit: ' V' },
+        'solarV': { name: 'Solar', unit: ' V' },
+        'windSpeed': { name: 'Wind', unit: ' m/s' },
+        'windDirection': { name: 'Wind Dir', unit: '°' },
+        'rainmm': { name: 'Rain', unit: ' mm' },
+        'terrainTemperature': { name: 'Terrain Temp', unit: '°C' },
+        'terrainHumidity': { name: 'Terrain Humidity', unit: '%' },
+        'airCO2ppm': { name: 'CO2', unit: ' ppm' },
+        'airNOXppm': { name: 'NOX', unit: ' ppm' },
+        'waterTemperature': { name: 'Water Temp', unit: '°C' },
+        'waterHumidity': { name: 'Water Humidity', unit: '%' },
+        'waterPH': { name: 'Water pH', unit: '' },
+        'batteryA': { name: 'Battery A', unit: ' A' },
+        'solarA': { name: 'Solar A', unit: ' A' },
+        'RSSI': { name: 'RSSI', unit: ' dBm' }
+    };
 
-    /**
-     * UTILITY FUNCTIONS
-     */
+    const tryParseSensorData = (msgText) => {
+        if (!msgText) return { isSensorData: false, data: null };
+        try {
+            const parsed = JSON.parse(msgText);
+            if (typeof parsed === 'object' && parsed !== null) {
+                return { isSensorData: true, data: parsed };
+            }
+            return { isSensorData: false, data: msgText };
+        } catch {
+            return { isSensorData: false, data: msgText };
+        }
+    };
 
-    async function apiRequest(endpoint, method = 'GET', body = null) {
+    const formatSensorData = (data, maxFields = MAX_FIELDS_VISIBLE) => {
+        if (!data || typeof data !== 'object') return '';
+        
+        const entries = Object.entries(data);
+        if (entries.length === 0) return 'No sensor data';
+
+        const parts = [];
+        let hiddenParts = [];
+
+        entries.forEach(([key, value]) => {
+            const config = FIELD_CONFIG[key];
+            if (config && value !== null && value !== undefined) {
+                const displayValue = typeof value === 'number' ? value.toFixed(1) : value;
+                const formatted = `${config.name}: ${displayValue}${config.unit}`;
+                if (parts.length < maxFields) {
+                    parts.push(formatted);
+                } else {
+                    hiddenParts.push(formatted);
+                }
+            }
+        });
+
+        let result = parts.join(' | ') || JSON.stringify(data);
+        
+        if (hiddenParts.length > 0) {
+            result += ` <span class="sensor-more" onclick="this.style.display='none'; this.nextElementSibling.style.display='inline';">[+${hiddenParts.length} more]</span><span class="sensor-hidden" style="display:none;"> | ${hiddenParts.join(' | ')}</span>`;
+        }
+
+        return result;
+    };
+
+    const apiRequest = async (endpoint, method = 'GET', body = null) => {
         const token = localStorage.getItem('access_token');
-        // No token needed for the login endpoint itself
         if (!token && endpoint !== '/api/login') {
             showLogin();
             return null;
         }
 
-        const headers = {
-            'Content-Type': 'application/json',
-        };
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const config = {
-            method: method,
-            headers: headers,
-        };
-
-        if (body) {
-            config.body = JSON.stringify(body);
-        }
+        const config = { method, headers };
+        if (body) config.body = JSON.stringify(body);
 
         try {
-            const response = await fetch(API_URL + endpoint, config);
-            if (response.status === 401 && endpoint !== '/api/login') {
-                // Token is invalid or expired
-                console.log('Token expired or invalid. Logging out.');
+            const response = await fetch(endpoint, config);
+            if (response.status === 401) {
                 logout();
                 return null;
             }
             return response;
         } catch (error) {
-            console.error('API Request Error:', error);
-            dashboardMessage.textContent = 'Network error occurred.';
-            dashboardMessage.style.color = 'red';
+            console.error('API Error:', error);
+            showToast('Network error occurred', 'error');
             return null;
         }
-    }
+    };
 
-    /**
-     * UI TOGGLE FUNCTIONS
-     */
+    const showLogin = () => {
+        document.getElementById('login-page').classList.remove('hidden');
+        document.getElementById('dashboard-page').classList.add('hidden');
+        stopAutoRefresh();
+    };
 
-    function showLogin() {
-        loginSection.style.display = 'block';
-        dashboardSection.style.display = 'none';
-        currentUser = null;
-        localStorage.removeItem('access_token');
-    }
+    const showDashboard = () => {
+        document.getElementById('login-page').classList.add('hidden');
+        document.getElementById('dashboard-page').classList.remove('hidden');
+        loadUserProfile();
+    };
 
-    async function showDashboard() {
-        loginSection.style.display = 'none';
-        dashboardSection.style.display = 'block';
-        await loadUserProfile();
-    }
+    const getStationStatus = (lastSeen) => {
+        if (!lastSeen) return { status: 'never-seen', healthy: false };
+        const now = Date.now();
+        const diff = now - new Date(lastSeen).getTime();
+        return { status: diff > UNHEALTHY_THRESHOLD_MS ? 'unhealthy' : 'healthy', healthy: diff <= UNHEALTHY_THRESHOLD_MS };
+    };
 
-    /**
-     * DATA LOADING AND RENDERING
-     */
+    const formatRelativeTime = (dateStr) => {
+        if (!dateStr) return 'Never';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diff = now - date;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
 
-    async function loadUserProfile() {
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        return `${days}d ago`;
+    };
+
+    const formatDateTime = (dateStr) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleString();
+    };
+
+    const showToast = (message, type = 'info') => {
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toast-message');
+        toastMsg.textContent = message;
+        toast.className = `toast ${type}`;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3000);
+    };
+
+    const showView = (viewName) => {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById(`view-${viewName}`).classList.add('active');
+        document.querySelector(`.nav-item[data-view="${viewName}"]`)?.classList.add('active');
+    };
+
+    const startAutoRefresh = () => {
+        stopAutoRefresh();
+        refreshTimer = setInterval(() => {
+            const activeView = document.querySelector('.view.active')?.id;
+            if (activeView === 'view-dashboard') loadDashboardFeed();
+            else if (activeView === 'view-messages') loadAllMessages();
+        }, REFRESH_INTERVAL);
+    };
+
+    const stopAutoRefresh = () => {
+        if (refreshTimer) {
+            clearInterval(refreshTimer);
+            refreshTimer = null;
+        }
+    };
+
+    const loadUserProfile = async () => {
         const response = await apiRequest('/api/profile');
         if (!response || !response.ok) {
             showLogin();
             return;
         }
-        
+
         currentUser = await response.json();
-        currentUserSpan.textContent = currentUser.username;
-        currentUserIdSpan.textContent = currentUser.id;
+        document.getElementById('current-username').textContent = currentUser.username;
+        document.getElementById('current-user-role').textContent = currentUser.is_admin ? 'Administrator' : 'User';
+        isAdmin = currentUser.is_admin;
 
-        if (currentUser.is_admin) {
-            userManagementSection.style.display = 'block';
-            await loadAdminData();
-        } else {
-            userManagementSection.style.display = 'none';
-            await loadUserData();
-        }
-    }
+        document.getElementById('nav-users').style.display = isAdmin ? 'flex' : 'none';
+        document.getElementById('add-user-btn').parentElement.style.display = isAdmin ? 'block' : 'none';
 
-    async function loadAdminData() {
-        await loadUsers();
-        await loadStations(true);
-    }
-    
-    async function loadUserData() {
-        await loadStations(false);
-    }
+        await loadStations();
+        loadDashboardFeed();
+        startAutoRefresh();
+    };
 
-    async function loadUsers() {
-        const response = await apiRequest('/api/admin/users');
-        if (!response || !response.ok) return;
-
-        try {
-            const users = await response.json();
-            usersTableBody.innerHTML = '';
-            users.forEach(user => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${user.id}</td>
-                    <td>${user.username}</td>
-                    <td>${user.is_admin ? 'Yes' : 'No'}</td>
-                    <td><button class="delete-user" data-id="${user.id}">Delete</button></td>
-                `;
-                usersTableBody.appendChild(row);
-            });
-        } catch (error) {
-            console.error("Failed to process users response.", error);
-        }
-    }
-
-    async function loadStations(isAdmin = false) {
+    const loadStations = async () => {
         const endpoint = isAdmin ? '/api/admin/stations' : '/api/user/stations';
         const response = await apiRequest(endpoint);
         if (!response || !response.ok) return;
-        
-        try {
-            const stations = await response.json();
-            stationsTableBody.innerHTML = '';
-            stations.forEach(station => {
-                const row = document.createElement('tr');
-                // For non-admins, the secret is not sent. Handled this in the backend already.
-                console.log(station)
-                const secret = station.secret || 'N/A (Hidden)';
-                row.innerHTML = `
-                    <td>${station.id}</td>
-                    <td>${station.station_id}</td>
-                    <td>${secret}</td> 
-                    <td>${station.user_id}</td>
-                    <td><button class="delete-station" data-id="${station.id}">Delete</button></td>
-                `;
-                // Hide delete button for non-admins
-                if (!isAdmin) {
-                    row.querySelector('.delete-station').style.display = 'none';
-                }
-                stationsTableBody.appendChild(row);
-            });
-        } catch (error) {
-            console.error("Failed to process stations response.", error);
+
+        stations = await response.json();
+        renderStationsGrid();
+        updateStationFilter();
+    };
+
+    const updateStationFilter = () => {
+        const select = document.getElementById('filter-station-messages');
+        select.innerHTML = '<option value="all">All Stations</option>';
+        stations.forEach(s => {
+            select.innerHTML += `<option value="${s.id}">${s.station_id}</option>`;
+        });
+    };
+
+    const renderStationsGrid = () => {
+        const grid = document.getElementById('stations-grid');
+        if (stations.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="radio"></i>
+                    <h3>No Stations</h3>
+                    <p>You don't have any stations yet.</p>
+                </div>`;
+            lucide.createIcons();
+            return;
         }
-    }
-    
-    /**
-     * EVENT HANDLERS
-     */
 
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = loginForm.username.value;
-        const password = loginForm.password.value;
+        grid.innerHTML = stations.map(station => {
+            const { healthy } = getStationStatus(station.last_seen);
+            return `
+                <div class="station-card">
+                    <div class="station-card-header">
+                        <span class="station-card-title">${station.station_id}</span>
+                        <span class="status-badge ${healthy ? 'status-healthy' : 'status-unhealthy'}">
+                            <i data-lucide="${healthy ? 'check-circle' : 'alert-circle'}"></i>
+                            ${healthy ? 'Healthy' : 'Unhealthy'}
+                        </span>
+                    </div>
+                    <div class="station-card-meta">
+                        <span>Last seen: <strong>${formatRelativeTime(station.last_seen)}</strong></span>
+                        <span>Public: <strong>${station.is_public ? 'Yes' : 'No'}</strong></span>
+                        ${station.description ? `<span>${station.description}</span>` : ''}
+                    </div>
+                    <div class="station-card-actions">
+                        <button class="btn btn-primary btn-sm" onclick="viewStation(${station.id})">
+                            <i data-lucide="eye"></i>
+                            View
+                        </button>
+                        ${isAdmin ? `
+                            <button class="btn btn-danger btn-sm" onclick="deleteStation(${station.id})">
+                                <i data-lucide="trash-2"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        lucide.createIcons();
+    };
 
-        try {
-            const response = await apiRequest('/api/login', 'POST', { username, password });
-            
-            if (!response) return; // Error already handled in apiRequest
-            console.log(response)
-            const data = await response.json();
-            if (response.ok) {
-                localStorage.setItem('access_token', data.access_token);
-                await showDashboard();
-            } else {
-                loginMessage.textContent = data.msg || 'Login failed.';
-                loginMessage.style.color = 'red';
+    const loadDashboardFeed = async () => {
+        const feed = document.getElementById('dashboard-feed');
+        const filterType = document.getElementById('filter-type-dashboard').value;
+        const showUnhealthy = document.getElementById('filter-unhealthy-dashboard').checked;
+
+        if (stations.length === 0) {
+            feed.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="activity"></i>
+                    <h3>No Stations</h3>
+                    <p>You don't have any stations yet.</p>
+                </div>`;
+            lucide.createIcons();
+            return;
+        }
+
+        const stationPromises = stations.map(async (station) => {
+            const response = await apiRequest(`/api/user/stations/${station.id}/messages`);
+            if (!response || !response.ok) return null;
+            const messages = await response.json();
+            return { station, messages };
+        });
+
+        const results = await Promise.all(stationPromises);
+        let html = '';
+
+        results.forEach(({ station, messages }) => {
+            if (!station) return;
+            const { healthy } = getStationStatus(station.last_seen);
+            let filteredMessages = messages;
+
+            if (filterType !== 'all') {
+                filteredMessages = filteredMessages.filter(m => m.level === filterType);
             }
-        } catch (error) {
-            throw(error);
-            loginMessage.textContent = 'An error occurred during login.';
-            loginMessage.style.color = 'red';
-        }
-    });
 
-    logoutButton.addEventListener('click', () => {
-        showLogin();
-    });
-    
-    addUserForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = addUserForm.querySelector('#new-username').value;
-        const password = addUserForm.querySelector('#new-password').value;
-        const is_admin = addUserForm.querySelector('#new-is-admin').checked;
+            if (!healthy && !showUnhealthy) return;
 
-        const response = await apiRequest('/api/admin/users', 'POST', { username, password, is_admin });
+            html += `
+                <div class="feed-station">
+                    <div class="feed-station-header">
+                        <span class="feed-station-title">
+                            ${station.station_id}
+                        </span>
+                        <span class="status-badge ${healthy ? 'status-healthy' : 'status-unhealthy'}">
+                            <i data-lucide="${healthy ? 'check-circle' : 'alert-circle'}"></i>
+                            ${healthy ? 'Healthy' : 'Unhealthy'}
+                        </span>
+                    </div>
+            `;
+
+            if (!healthy) {
+                html += `<div class="feed-unhealthy-msg">
+                    <i data-lucide="alert-triangle"></i>
+                    No messages in ${formatRelativeTime(station.last_seen)}
+                </div>`;
+            } else if (filteredMessages.length === 0) {
+                html += `<div class="feed-unhealthy-msg" style="color: var(--text-secondary)">
+                    No messages matching filters
+                </div>`;
+            } else {
+                html += `<div class="feed-station-messages">`;
+                filteredMessages.slice(0, 5).forEach(msg => {
+                    html += renderMessageItem(msg);
+                });
+                if (filteredMessages.length > 5) {
+                    html += `<button class="btn btn-ghost btn-sm" onclick="viewStation(${station.id})" style="margin-top: 8px">
+                        View all ${filteredMessages.length} messages
+                    </button>`;
+                }
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+        });
+
+        feed.innerHTML = html || '<div class="empty-state"><h3>No data</h3></div>';
+        lucide.createIcons();
+    };
+
+    const renderMessageItem = (msg) => {
+        const parsed = tryParseSensorData(msg.message);
+        let icon, iconClass, displayText, bgClass = '';
         
+        if (parsed.isSensorData) {
+            icon = 'activity';
+            iconClass = 'info';
+            displayText = formatSensorData(parsed.data);
+        } else {
+            icon = msg.level === 'warning' ? 'alert-triangle' : 'x-circle';
+            iconClass = msg.level;
+            bgClass = msg.level === 'warning' ? 'warning-bg' : 'error-bg';
+            displayText = msg.message || 'Unknown message';
+        }
+        
+        return `
+            <div class="message-item ${iconClass} ${bgClass}">
+                <div class="message-icon ${iconClass}">
+                    <i data-lucide="${icon}"></i>
+                </div>
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-level ${iconClass}">${parsed.isSensorData ? 'Data' : msg.level}</span>
+                        <span class="message-time" title="${formatDateTime(msg.created_at)}">${formatRelativeTime(msg.created_at)}</span>
+                    </div>
+                    <div class="message-text">${displayText}</div>
+                </div>
+            </div>
+        `;
+    };
+
+    window.viewStation = (stationId) => {
+        currentStationId = stationId;
+        const station = stations.find(s => s.id === stationId);
+        if (!station) return;
+
+        const { healthy } = getStationStatus(station.last_seen);
+
+        document.getElementById('station-detail-name').textContent = station.station_id;
+        document.getElementById('station-detail-lastseen').textContent = `Last seen: ${formatRelativeTime(station.last_seen)}`;
+        document.getElementById('station-detail-secret').value = station.secret || 'N/A';
+        document.getElementById('station-detail-description').value = station.description || '';
+        document.getElementById('station-detail-public').checked = station.is_public;
+        
+        const statusEl = document.getElementById('station-detail-status');
+        statusEl.className = `status-badge ${healthy ? 'status-healthy' : 'status-unhealthy'}`;
+        statusEl.innerHTML = `<i data-lucide="${healthy ? 'check-circle' : 'alert-circle'}"></i>${healthy ? 'Healthy' : 'Unhealthy'}`;
+
+        showView('station-detail');
+        loadStationMessages();
+        lucide.createIcons();
+    };
+
+    window.copySecret = () => {
+        const secret = document.getElementById('station-detail-secret').value;
+        if (secret && secret !== 'N/A') {
+            navigator.clipboard.writeText(secret);
+            showToast('Secret copied to clipboard', 'success');
+        }
+    };
+
+    const loadStationMessages = async () => {
+        const container = document.getElementById('station-messages');
+        const limit = parseInt(document.getElementById('filter-messages-limit').value) || 100;
+
+        if (!currentStationId) return;
+
+        const response = await apiRequest(`/api/user/stations/${currentStationId}/messages`);
+        if (!response || !response.ok) {
+            container.innerHTML = '<div class="empty-state"><p>Failed to load messages</p></div>';
+            return;
+        }
+
+        const messages = await response.json();
+        const limitedMessages = messages.slice(0, limit);
+
+        if (limitedMessages.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i data-lucide="message-circle"></i>
+                    <h3>No Messages</h3>
+                    <p>This station has no messages yet.</p>
+                </div>`;
+            lucide.createIcons();
+            return;
+        }
+
+        container.innerHTML = limitedMessages.map(msg => renderMessageItem(msg)).join('');
+        lucide.createIcons();
+    };
+
+    const saveStation = async () => {
+        if (!currentStationId) return;
+
+        const description = document.getElementById('station-detail-description').value;
+        const isPublic = document.getElementById('station-detail-public').checked;
+
+        const response = await apiRequest(`/api/user/stations/${currentStationId}`, 'PUT', {
+            description,
+            is_public: isPublic
+        });
+
         if (response && response.ok) {
-            addUserForm.reset();
+            showToast('Station updated successfully', 'success');
+            await loadStations();
+        } else {
+            const data = response ? await response.json() : {};
+            showToast(data.msg || 'Failed to update station', 'error');
+        }
+    };
+
+    window.deleteStation = async (stationId) => {
+        if (!isAdmin) return;
+        if (!confirm('Are you sure you want to delete this station?')) return;
+
+        const response = await apiRequest(`/api/admin/stations/${stationId}`, 'DELETE');
+        if (response && response.ok) {
+            showToast('Station deleted successfully', 'success');
+            await loadStations();
+            loadDashboardFeed();
+        } else {
+            showToast('Failed to delete station', 'error');
+        }
+    };
+
+    const loadAllMessages = async () => {
+        const container = document.getElementById('all-messages');
+        const filterStation = document.getElementById('filter-station-messages').value;
+        const filterType = document.getElementById('filter-type-messages').value;
+        const unhealthyOnly = document.getElementById('filter-unhealthy-messages').checked;
+
+        const stationPromises = stations.map(async (station) => {
+            const response = await apiRequest(`/api/user/stations/${station.id}/messages`);
+            if (!response || !response.ok) return [];
+            const messages = await response.json();
+            return messages.map(m => ({ ...m, station_id: station.station_id, station_db_id: station.id }));
+        });
+
+        let allMessages = (await Promise.all(stationPromises)).flat();
+
+        if (filterStation !== 'all') {
+            allMessages = allMessages.filter(m => m.station_db_id === parseInt(filterStation));
+        }
+        if (filterType !== 'all') {
+            allMessages = allMessages.filter(m => m.level === filterType);
+        }
+        allMessages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        const stationsToShow = unhealthyOnly 
+            ? stations.filter(s => !getStationStatus(s.last_seen).healthy)
+            : stations;
+
+        const stationsIdsToShow = new Set(stationsToShow.map(s => s.id));
+
+        let html = '';
+        
+        stationsToShow.forEach(station => {
+            const { healthy } = getStationStatus(station.last_seen);
+            if (unhealthyOnly && healthy) return;
+
+            if (unhealthyOnly) {
+                html += `
+                    <div class="feed-station">
+                        <div class="feed-station-header">
+                            <span class="feed-station-title">${station.station_id}</span>
+                            <span class="status-badge status-unhealthy">
+                                <i data-lucide="alert-circle"></i>
+                                Unhealthy
+                            </span>
+                        </div>
+                        <div class="feed-unhealthy-msg">
+                            <i data-lucide="alert-triangle"></i>
+                            No messages in ${formatRelativeTime(station.last_seen)}
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        if (!unhealthyOnly) {
+            if (allMessages.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <i data-lucide="message-circle"></i>
+                        <h3>No Messages</h3>
+                        <p>No messages match your filters.</p>
+                    </div>`;
+            } else {
+                allMessages.forEach(msg => {
+                    const parsed = tryParseSensorData(msg.message);
+                    let icon, iconClass, displayText, bgClass = '';
+                    
+                    if (parsed.isSensorData) {
+                        icon = 'activity';
+                        iconClass = 'info';
+                        displayText = formatSensorData(parsed.data, 3);
+                    } else {
+                        icon = msg.level === 'warning' ? 'alert-triangle' : 'x-circle';
+                        iconClass = msg.level;
+                        bgClass = msg.level === 'warning' ? 'warning-bg' : 'error-bg';
+                        displayText = msg.message || 'Unknown message';
+                    }
+                    
+                    html += `
+                        <div class="message-item ${iconClass} ${bgClass}">
+                            <div class="message-icon ${iconClass}">
+                                <i data-lucide="${icon}"></i>
+                            </div>
+                            <div class="message-content">
+                                <div class="message-header">
+                                    <span class="message-level ${iconClass}">${parsed.isSensorData ? 'Data' : msg.level}</span>
+                                    <span class="message-time" title="${formatDateTime(msg.created_at)}">${formatRelativeTime(msg.created_at)}</span>
+                                </div>
+                                <div class="message-text">${displayText}</div>
+                                <div class="message-station">${msg.station_id}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        container.innerHTML = html || '<div class="empty-state"><h3>No data</h3></div>';
+        lucide.createIcons();
+    };
+
+    const loadUsers = async () => {
+        if (!isAdmin) return;
+
+        const response = await apiRequest('/api/admin/users');
+        if (!response || !response.ok) return;
+
+        const users = await response.json();
+        const list = document.getElementById('users-list');
+
+        list.innerHTML = users.map(user => `
+            <div class="user-card">
+                <div class="user-card-info">
+                    <div class="user-card-avatar">
+                        <i data-lucide="user"></i>
+                    </div>
+                    <div class="user-card-details">
+                        <h3>${user.username}</h3>
+                        <span>${user.is_admin ? 'Administrator' : 'Regular User'}</span>
+                    </div>
+                </div>
+                <div class="user-card-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal(${user.id})">
+                        <i data-lucide="key"></i>
+                        Reset
+                    </button>
+                    ${user.id !== currentUser.id ? `
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `).join('');
+        lucide.createIcons();
+    };
+
+    window.deleteUser = async (userId) => {
+        if (!isAdmin) return;
+        if (!confirm('Are you sure you want to delete this user?')) return;
+
+        const response = await apiRequest(`/api/admin/users/${userId}`, 'DELETE');
+        if (response && response.ok) {
+            showToast('User deleted successfully', 'success');
             await loadUsers();
         } else {
-            const data = response ? await response.json() : { msg: "Request failed" };
-            alert(`Error: ${data.msg}`);
+            showToast('Failed to delete user', 'error');
         }
-    });
+    };
 
-    addStationForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const station_id = addStationForm.querySelector('#new-station-id').value;
-        const user_id = addStationForm.querySelector('#station-user-id').value;
+    const addUser = async (username, password, isAdminUser) => {
+        const response = await apiRequest('/api/admin/users', 'POST', { username, password, is_admin: isAdminUser });
+        if (response && response.ok) {
+            showToast('User added successfully', 'success');
+            await loadUsers();
+            closeModal('modal-add-user');
+        } else {
+            const data = response ? await response.json() : {};
+            showToast(data.msg || 'Failed to add user', 'error');
+        }
+    };
 
-        const response = await apiRequest('/api/admin/stations', 'POST', { station_id, user_id: parseInt(user_id) });
+    let allUsers = [];
+
+    const loadUsersForDropdown = async () => {
+        const response = await apiRequest('/api/admin/users');
+        if (!response || !response.ok) return;
+        allUsers = await response.json();
+        
+        const select = document.getElementById('station-user-select');
+        select.innerHTML = '<option value="">-- Select User --</option>';
+        allUsers.forEach(user => {
+            select.innerHTML += `<option value="${user.id}">${user.username}</option>`;
+        });
+    };
+
+    const addStation = async (stationId, userId = null) => {
+        let response;
+        if (isAdmin && userId) {
+            response = await apiRequest('/api/admin/stations', 'POST', { station_id: stationId, user_id: parseInt(userId) });
+        } else {
+            response = await apiRequest('/api/user/stations', 'POST', { station_id: stationId });
+        }
         
         if (response && response.ok) {
-            addStationForm.reset();
-            await loadStations(true);
+            const data = await response.json();
+            showToast(`Station added! Secret: ${data.secret}`, 'success');
+            await loadStations();
+            closeModal('modal-add-station');
+            document.getElementById('add-station-form').reset();
         } else {
-            const data = response ? await response.json() : { msg: "Request failed" };
-            alert(`Error: ${data.msg}`);
+            const data = response ? await response.json() : {};
+            showToast(data.msg || 'Failed to add station', 'error');
         }
-    });
+    };
 
-    usersTableBody.addEventListener('click', async (e) => {
-        if (e.target.classList.contains('delete-user')) {
-            const userId = e.target.dataset.id;
-            if (confirm(`Are you sure you want to delete user ${userId}?`)) {
-                const response = await apiRequest(`/api/admin/users/${userId}`, 'DELETE');
-                if (response && response.ok) {
-                    await loadUsers();
-                } else {
-                    const data = response ? await response.json() : { msg: "Request failed" };
-                    alert(`Error: ${data.msg}`);
-                }
-            }
+    const resetUserPassword = async (userId, newPassword) => {
+        const response = await apiRequest(`/api/admin/users/${userId}/reset-password`, 'PUT', { new_password: newPassword });
+        if (response && response.ok) {
+            showToast('Password reset successfully', 'success');
+            closeModal('modal-reset-password');
+        } else {
+            const data = response ? await response.json() : {};
+            showToast(data.msg || 'Failed to reset password', 'error');
         }
-    });
+    };
 
-    stationsTableBody.addEventListener('click', async (e) => {
-        if (e.target.classList.contains('delete-station')) {
-            const stationId = e.target.dataset.id;
-            if (confirm(`Are you sure you want to delete station ${stationId}?`)) {
-                const response = await apiRequest(`/api/admin/stations/${stationId}`, 'DELETE');
-                if (response && response.ok) {
-                    await loadStations(true);
-                } else {
-                    const data = response ? await response.json() : { msg: "Request failed" };
-                    alert(`Error: ${data.msg}`);
-                }
-            }
-        }
-    });
+    const openModal = (modalId) => {
+        document.getElementById(modalId).classList.remove('hidden');
+    };
 
-    /**
-     * INITIALIZATION
-     */
-    function init() {
-        if (localStorage.getItem('access_token')) {
+    const closeModal = (modalId) => {
+        document.getElementById(modalId).classList.add('hidden');
+    };
+
+    const logout = () => {
+        showLogin();
+        localStorage.removeItem('access_token');
+        currentUser = null;
+        stations = [];
+    };
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = e.target.username.value;
+        const password = e.target.password.value;
+
+        const response = await apiRequest('/api/login', 'POST', { username, password });
+        if (!response) return;
+
+        const data = await response.json();
+        if (response.ok) {
+            localStorage.setItem('access_token', data.access_token);
             showDashboard();
         } else {
-            showLogin();
+            document.getElementById('login-message').textContent = data.msg || 'Login failed';
         }
-    }
+    });
 
-    init();
+    document.getElementById('logout-button').addEventListener('click', logout);
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const view = item.dataset.view;
+            if (view === 'stations') loadStations();
+            if (view === 'messages') loadAllMessages();
+            if (view === 'users') loadUsers();
+            showView(view);
+        });
+    });
+
+    document.getElementById('back-to-stations').addEventListener('click', () => {
+        currentStationId = null;
+        showView('stations');
+        loadStations();
+    });
+
+    document.getElementById('save-station-detail').addEventListener('click', saveStation);
+
+    document.getElementById('filter-messages-limit').addEventListener('change', loadStationMessages);
+
+    document.getElementById('refresh-dashboard').addEventListener('click', loadDashboardFeed);
+    document.getElementById('refresh-messages').addEventListener('click', loadAllMessages);
+
+    document.getElementById('filter-type-dashboard').addEventListener('change', loadDashboardFeed);
+    document.getElementById('filter-unhealthy-dashboard').addEventListener('change', loadDashboardFeed);
+    document.getElementById('filter-station-messages').addEventListener('change', loadAllMessages);
+    document.getElementById('filter-type-messages').addEventListener('change', loadAllMessages);
+    document.getElementById('filter-unhealthy-messages').addEventListener('change', loadAllMessages);
+
+    document.getElementById('add-user-btn').addEventListener('click', () => openModal('modal-add-user'));
+
+    document.getElementById('add-user-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = document.getElementById('new-username').value;
+        const password = document.getElementById('new-password').value;
+        const isAdminUser = document.getElementById('new-is-admin').checked;
+        addUser(username, password, isAdminUser);
+        e.target.reset();
+    });
+
+    document.getElementById('add-station-btn').addEventListener('click', async () => {
+        if (isAdmin) {
+            await loadUsersForDropdown();
+            document.getElementById('station-user-select-group').style.display = 'block';
+        } else {
+            document.getElementById('station-user-select-group').style.display = 'none';
+        }
+        openModal('modal-add-station');
+    });
+
+    document.getElementById('add-station-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const stationId = document.getElementById('new-station-id').value;
+        const userId = document.getElementById('station-user-select').value;
+        
+        if (stationId.length > 32) {
+            showToast('Station ID must be max 32 characters', 'error');
+            return;
+        }
+        
+        if (isAdmin && userId) {
+            addStation(stationId, userId);
+        } else {
+            addStation(stationId, null);
+        }
+    });
+
+    document.getElementById('reset-password-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const userId = document.getElementById('reset-user-id').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        
+        if (newPassword !== confirmPassword) {
+            showToast('Passwords do not match', 'error');
+            return;
+        }
+        
+        if (newPassword.length < 1) {
+            showToast('Password cannot be empty', 'error');
+            return;
+        }
+        
+        resetUserPassword(parseInt(userId), newPassword);
+        e.target.reset();
+    });
+
+    window.openResetPasswordModal = (userId) => {
+        document.getElementById('reset-user-id').value = userId;
+        openModal('modal-reset-password');
+    };
+
+    const changeUserPassword = async (currentPassword, newPassword) => {
+        const response = await apiRequest('/api/user/change-password', 'PUT', {
+            current_password: currentPassword,
+            new_password: newPassword
+        });
+        if (response && response.ok) {
+            showToast('Password changed successfully', 'success');
+            closeModal('modal-change-password');
+        } else {
+            const data = response ? await response.json() : {};
+            showToast(data.msg || 'Failed to change password', 'error');
+        }
+    };
+
+    document.getElementById('change-password-btn').addEventListener('click', () => {
+        openModal('modal-change-password');
+    });
+
+    document.getElementById('change-password-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('user-new-password').value;
+        const confirmPassword = document.getElementById('user-confirm-password').value;
+        
+        if (newPassword !== confirmPassword) {
+            showToast('Passwords do not match', 'error');
+            return;
+        }
+        
+        if (newPassword.length < 1) {
+            showToast('Password cannot be empty', 'error');
+            return;
+        }
+        
+        changeUserPassword(currentPassword, newPassword);
+        e.target.reset();
+    });
+
+    document.querySelectorAll('.modal-close').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.modal').classList.add('hidden');
+        });
+    });
+
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.addEventListener('click', () => {
+            backdrop.closest('.modal').classList.add('hidden');
+        });
+    });
+
+    if (localStorage.getItem('access_token')) {
+        showDashboard();
+    } else {
+        showLogin();
+    }
 });
