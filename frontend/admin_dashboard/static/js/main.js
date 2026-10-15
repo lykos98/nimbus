@@ -45,6 +45,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Escape untrusted strings before injecting into innerHTML (prevents stored XSS
+    // via station_id / description / message payloads / usernames).
+    const escapeHtml = (value) => {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+
+    // Login error box: hidden by default, shown only on failure.
+    // Fixes the "empty pink box" glitch (div always rendered with .message-error).
+    const showLoginMessage = (message) => {
+        const el = document.getElementById('login-message');
+        el.textContent = message;
+        el.classList.remove('hidden');
+    };
+
+    const clearLoginMessage = () => {
+        const el = document.getElementById('login-message');
+        el.textContent = '';
+        el.classList.add('hidden');
+    };
+
     const formatSensorData = (data, maxFields = MAX_FIELDS_VISIBLE) => {
         if (!data || typeof data !== 'object') return '';
         
@@ -57,7 +83,9 @@ document.addEventListener('DOMContentLoaded', () => {
         entries.forEach(([key, value]) => {
             const config = FIELD_CONFIG[key];
             if (config && value !== null && value !== undefined) {
-                const displayValue = typeof value === 'number' ? value.toFixed(1) : value;
+                // Escape key-derived and value-derived content; config strings are trusted,
+                // values come from station payloads and must not break out of HTML.
+                const displayValue = typeof value === 'number' ? value.toFixed(1) : escapeHtml(value);
                 const formatted = `${config.name}: ${displayValue}${config.unit}`;
                 if (parts.length < maxFields) {
                     parts.push(formatted);
@@ -67,33 +95,46 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        let result = parts.join(' | ') || JSON.stringify(data);
+        let result = parts.join(' | ') || escapeHtml(JSON.stringify(data));
         
         if (hiddenParts.length > 0) {
-            result += ` <span class="sensor-more" onclick="this.style.display='none'; this.nextElementSibling.style.display='inline';">[+${hiddenParts.length} more]</span><span class="sensor-hidden" style="display:none;"> | ${hiddenParts.join(' | ')}</span>`;
+            // No inline onclick: handled via delegated click on .sensor-more (CSP-friendly).
+            result += ` <span class="sensor-more" role="button" tabindex="0" data-expandable>[+${hiddenParts.length} more]</span><span class="sensor-hidden" style="display:none;"> | ${hiddenParts.join(' | ')}</span>`;
         }
 
         return result;
     };
 
+    const getCookie = (name) => {
+        const match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+        return match ? decodeURIComponent(match[1]) : null;
+    };
+
+    // Cookie-based auth: browser attaches HttpOnly access cookie automatically.
+    // No token in localStorage/JS. Writes also send the CSRF token header.
     const apiRequest = async (endpoint, method = 'GET', body = null) => {
-        const token = localStorage.getItem('access_token');
-        if (!token && endpoint !== '/api/login') {
-            showLogin();
-            return null;
+        const upperMethod = method.toUpperCase();
+        const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(upperMethod);
+
+        // Only send Content-Type when there is a JSON body (avoids needless preflights).
+        const headers = { 'Accept': 'application/json' };
+        if (body) headers['Content-Type'] = 'application/json';
+        if (isWrite && endpoint !== '/api/login') {
+            const csrf = getCookie('csrf_access_token');
+            if (csrf) headers['X-CSRF-TOKEN'] = csrf;
         }
 
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const config = { method, headers };
+        const config = { method: upperMethod, headers, credentials: 'include' };
         if (body) config.body = JSON.stringify(body);
 
         try {
             const response = await fetch(endpoint, config);
             if (response.status === 401) {
-                logout();
-                return null;
+                // Session expired/invalid (or not logged in). Don't loop on auth endpoints.
+                if (endpoint !== '/api/login' && endpoint !== '/api/profile' && endpoint !== '/api/logout') {
+                    clearSessionLocal();
+                }
+                return response; // let callers decide (login shows error, profile shows login)
             }
             return response;
         } catch (error) {
@@ -110,6 +151,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const showDashboard = () => {
+        clearLoginMessage();
+        // Clear password field so it doesn't linger in the DOM after login.
+        const pwd = document.getElementById('password');
+        if (pwd) pwd.value = '';
         document.getElementById('login-page').classList.add('hidden');
         document.getElementById('dashboard-page').classList.remove('hidden');
         loadUserProfile();
@@ -177,8 +222,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadUserProfile = async () => {
         const response = await apiRequest('/api/profile');
         if (!response || !response.ok) {
-            showLogin();
-            return;
+            clearSessionLocal();
+            return false;
         }
 
         currentUser = await response.json();
@@ -187,11 +232,13 @@ document.addEventListener('DOMContentLoaded', () => {
         isAdmin = currentUser.is_admin;
 
         document.getElementById('nav-users').style.display = isAdmin ? 'flex' : 'none';
-        document.getElementById('add-user-btn').parentElement.style.display = isAdmin ? 'block' : 'none';
+        // Hide only the button, not its header container (previous code hid the whole header).
+        document.getElementById('add-user-btn').style.display = isAdmin ? '' : 'none';
 
         await loadStations();
         loadDashboardFeed();
         startAutoRefresh();
+        return true;
     };
 
     const loadStations = async () => {
@@ -208,7 +255,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById('filter-station-messages');
         select.innerHTML = '<option value="all">All Stations</option>';
         stations.forEach(s => {
-            select.innerHTML += `<option value="${s.id}">${s.station_id}</option>`;
+            // station.id is numeric (backend int); station_id is user-controlled -> escape.
+            const opt = document.createElement('option');
+            opt.value = String(Number(s.id));
+            opt.textContent = s.station_id;
+            select.appendChild(opt);
         });
     };
 
@@ -227,27 +278,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         grid.innerHTML = stations.map(station => {
             const { healthy } = getStationStatus(station.last_seen);
+            const safeId = Number(station.id);
             return `
                 <div class="station-card">
                     <div class="station-card-header">
-                        <span class="station-card-title">${station.station_id}</span>
+                        <span class="station-card-title">${escapeHtml(station.station_id)}</span>
                         <span class="status-badge ${healthy ? 'status-healthy' : 'status-unhealthy'}">
                             <i data-lucide="${healthy ? 'check-circle' : 'alert-circle'}"></i>
                             ${healthy ? 'Healthy' : 'Unhealthy'}
                         </span>
                     </div>
                     <div class="station-card-meta">
-                        <span>Last seen: <strong>${formatRelativeTime(station.last_seen)}</strong></span>
+                        <span>Last seen: <strong>${escapeHtml(formatRelativeTime(station.last_seen))}</strong></span>
                         <span>Public: <strong>${station.is_public ? 'Yes' : 'No'}</strong></span>
-                        ${station.description ? `<span>${station.description}</span>` : ''}
+                        ${station.description ? `<span>${escapeHtml(station.description)}</span>` : ''}
                     </div>
                     <div class="station-card-actions">
-                        <button class="btn btn-primary btn-sm" onclick="viewStation(${station.id})">
+                        <button class="btn btn-primary btn-sm" data-action="view-station" data-id="${safeId}">
                             <i data-lucide="eye"></i>
                             View
                         </button>
                         ${isAdmin ? `
-                            <button class="btn btn-danger btn-sm" onclick="deleteStation(${station.id})">
+                            <button class="btn btn-danger btn-sm" data-action="delete-station" data-id="${safeId}" aria-label="Delete station">
                                 <i data-lucide="trash-2"></i>
                             </button>
                         ` : ''}
@@ -284,10 +336,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const results = await Promise.all(stationPromises);
         let html = '';
 
-        results.forEach(({ station, messages }) => {
+        results.forEach((result) => {
+            if (!result) return;
+            const { station, messages } = result;
             if (!station) return;
             const { healthy } = getStationStatus(station.last_seen);
-            let filteredMessages = messages;
+            let filteredMessages = Array.isArray(messages) ? messages : [];
 
             if (filterType !== 'all') {
                 filteredMessages = filteredMessages.filter(m => m.level === filterType);
@@ -299,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="feed-station">
                     <div class="feed-station-header">
                         <span class="feed-station-title">
-                            ${station.station_id}
+                            ${escapeHtml(station.station_id)}
                         </span>
                         <span class="status-badge ${healthy ? 'status-healthy' : 'status-unhealthy'}">
                             <i data-lucide="${healthy ? 'check-circle' : 'alert-circle'}"></i>
@@ -311,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!healthy) {
                 html += `<div class="feed-unhealthy-msg">
                     <i data-lucide="alert-triangle"></i>
-                    No messages in ${formatRelativeTime(station.last_seen)}
+                    No messages in ${escapeHtml(formatRelativeTime(station.last_seen))}
                 </div>`;
             } else if (filteredMessages.length === 0) {
                 html += `<div class="feed-unhealthy-msg" style="color: var(--text-secondary)">
@@ -323,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     html += renderMessageItem(msg);
                 });
                 if (filteredMessages.length > 5) {
-                    html += `<button class="btn btn-ghost btn-sm" onclick="viewStation(${station.id})" style="margin-top: 8px">
+                    html += `<button class="btn btn-ghost btn-sm" data-action="view-station" data-id="${Number(station.id)}" style="margin-top: 8px">
                         View all ${filteredMessages.length} messages
                     </button>`;
                 }
@@ -337,20 +391,26 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     };
 
-    const renderMessageItem = (msg) => {
+    const renderMessageItem = (msg, stationLabel = null) => {
         const parsed = tryParseSensorData(msg.message);
         let icon, iconClass, displayText, bgClass = '';
+        const allowedLevels = ['info', 'warning', 'error'];
+        const safeLevel = allowedLevels.includes(msg.level) ? msg.level : 'info';
         
         if (parsed.isSensorData) {
             icon = 'activity';
             iconClass = 'info';
+            // formatSensorData already escapes values; it returns HTML with trusted markup.
             displayText = formatSensorData(parsed.data);
         } else {
-            icon = msg.level === 'warning' ? 'alert-triangle' : 'x-circle';
-            iconClass = msg.level;
-            bgClass = msg.level === 'warning' ? 'warning-bg' : 'error-bg';
-            displayText = msg.message || 'Unknown message';
+            icon = safeLevel === 'warning' ? 'alert-triangle' : safeLevel === 'error' ? 'x-circle' : 'info';
+            iconClass = safeLevel;
+            bgClass = safeLevel === 'warning' ? 'warning-bg' : safeLevel === 'error' ? 'error-bg' : '';
+            // Plain-text message from station/backend: must be escaped (stored-XSS source).
+            displayText = escapeHtml(msg.message) || 'Unknown message';
         }
+
+        const safeLabel = parsed.isSensorData ? 'Data' : escapeHtml(safeLevel);
         
         return `
             <div class="message-item ${iconClass} ${bgClass}">
@@ -359,18 +419,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="message-content">
                     <div class="message-header">
-                        <span class="message-level ${iconClass}">${parsed.isSensorData ? 'Data' : msg.level}</span>
-                        <span class="message-time" title="${formatDateTime(msg.created_at)}">${formatRelativeTime(msg.created_at)}</span>
+                        <span class="message-level ${iconClass}">${safeLabel}</span>
+                        <span class="message-time" title="${escapeHtml(formatDateTime(msg.created_at))}">${escapeHtml(formatRelativeTime(msg.created_at))}</span>
                     </div>
                     <div class="message-text">${displayText}</div>
+                    ${stationLabel ? `<div class="message-station">${escapeHtml(stationLabel)}</div>` : ''}
                 </div>
             </div>
         `;
     };
 
-    window.viewStation = (stationId) => {
-        currentStationId = stationId;
-        const station = stations.find(s => s.id === stationId);
+    const viewStationById = (stationId) => {
+        currentStationId = Number(stationId);
+        const station = stations.find(s => s.id === currentStationId);
         if (!station) return;
 
         const { healthy } = getStationStatus(station.last_seen);
@@ -390,13 +451,29 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     };
 
-    window.copySecret = () => {
+    // Kept for backwards-compat (e.g. console use); UI now uses data-action delegation.
+    window.viewStation = viewStationById;
+
+    const copySecret = async () => {
         const secret = document.getElementById('station-detail-secret').value;
         if (secret && secret !== 'N/A') {
-            navigator.clipboard.writeText(secret);
-            showToast('Secret copied to clipboard', 'success');
+            try {
+                await navigator.clipboard.writeText(secret);
+                showToast('Secret copied to clipboard', 'success');
+            } catch {
+                // Fallback for non-secure contexts / denied permissions.
+                const input = document.getElementById('station-detail-secret');
+                input.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('Secret copied to clipboard', 'success');
+                } catch {
+                    showToast('Copy failed: select and copy manually', 'error');
+                }
+            }
         }
     };
+    window.copySecret = copySecret;
 
     const loadStationMessages = async () => {
         const container = document.getElementById('station-messages');
@@ -448,11 +525,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.deleteStation = async (stationId) => {
+    const deleteStationById = async (stationId) => {
         if (!isAdmin) return;
         if (!confirm('Are you sure you want to delete this station?')) return;
 
-        const response = await apiRequest(`/api/admin/stations/${stationId}`, 'DELETE');
+        const response = await apiRequest(`/api/admin/stations/${Number(stationId)}`, 'DELETE');
         if (response && response.ok) {
             showToast('Station deleted successfully', 'success');
             await loadStations();
@@ -461,6 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Failed to delete station', 'error');
         }
     };
+    window.deleteStation = deleteStationById;
 
     const loadAllMessages = async () => {
         const container = document.getElementById('all-messages');
@@ -489,8 +567,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ? stations.filter(s => !getStationStatus(s.last_seen).healthy)
             : stations;
 
-        const stationsIdsToShow = new Set(stationsToShow.map(s => s.id));
-
         let html = '';
         
         stationsToShow.forEach(station => {
@@ -501,7 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += `
                     <div class="feed-station">
                         <div class="feed-station-header">
-                            <span class="feed-station-title">${station.station_id}</span>
+                            <span class="feed-station-title">${escapeHtml(station.station_id)}</span>
                             <span class="status-badge status-unhealthy">
                                 <i data-lucide="alert-circle"></i>
                                 Unhealthy
@@ -509,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="feed-unhealthy-msg">
                             <i data-lucide="alert-triangle"></i>
-                            No messages in ${formatRelativeTime(station.last_seen)}
+                            No messages in ${escapeHtml(formatRelativeTime(station.last_seen))}
                         </div>
                     </div>
                 `;
@@ -525,36 +601,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p>No messages match your filters.</p>
                     </div>`;
             } else {
+                // Reuse renderMessageItem (escaped) and append the station name safely.
                 allMessages.forEach(msg => {
-                    const parsed = tryParseSensorData(msg.message);
-                    let icon, iconClass, displayText, bgClass = '';
-                    
-                    if (parsed.isSensorData) {
-                        icon = 'activity';
-                        iconClass = 'info';
-                        displayText = formatSensorData(parsed.data, 3);
-                    } else {
-                        icon = msg.level === 'warning' ? 'alert-triangle' : 'x-circle';
-                        iconClass = msg.level;
-                        bgClass = msg.level === 'warning' ? 'warning-bg' : 'error-bg';
-                        displayText = msg.message || 'Unknown message';
-                    }
-                    
-                    html += `
-                        <div class="message-item ${iconClass} ${bgClass}">
-                            <div class="message-icon ${iconClass}">
-                                <i data-lucide="${icon}"></i>
-                            </div>
-                            <div class="message-content">
-                                <div class="message-header">
-                                    <span class="message-level ${iconClass}">${parsed.isSensorData ? 'Data' : msg.level}</span>
-                                    <span class="message-time" title="${formatDateTime(msg.created_at)}">${formatRelativeTime(msg.created_at)}</span>
-                                </div>
-                                <div class="message-text">${displayText}</div>
-                                <div class="message-station">${msg.station_id}</div>
-                            </div>
-                        </div>
-                    `;
+                    html += renderMessageItem(msg, msg.station_id);
                 });
             }
         }
@@ -579,17 +628,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i data-lucide="user"></i>
                     </div>
                     <div class="user-card-details">
-                        <h3>${user.username}</h3>
+                        <h3>${escapeHtml(user.username)}</h3>
                         <span>${user.is_admin ? 'Administrator' : 'Regular User'}</span>
                     </div>
                 </div>
                 <div class="user-card-actions">
-                    <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal(${user.id})">
+                    <button class="btn btn-secondary btn-sm" data-action="reset-password" data-id="${Number(user.id)}">
                         <i data-lucide="key"></i>
                         Reset
                     </button>
                     ${user.id !== currentUser.id ? `
-                        <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">
+                        <button class="btn btn-danger btn-sm" data-action="delete-user" data-id="${Number(user.id)}" aria-label="Delete user">
                             <i data-lucide="trash-2"></i>
                         </button>
                     ` : ''}
@@ -599,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     };
 
-    window.deleteUser = async (userId) => {
+    const deleteUserById = async (userId) => {
         if (!isAdmin) return;
         if (!confirm('Are you sure you want to delete this user?')) return;
 
@@ -611,6 +660,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Failed to delete user', 'error');
         }
     };
+    window.deleteUser = deleteUserById;
+
+    const openResetPasswordModalById = (userId) => {
+        document.getElementById('reset-user-id').value = Number(userId);
+        openModal('modal-reset-password');
+    };
+    window.openResetPasswordModal = openResetPasswordModalById;
 
     const addUser = async (username, password, isAdminUser) => {
         const response = await apiRequest('/api/admin/users', 'POST', { username, password, is_admin: isAdminUser });
@@ -634,7 +690,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById('station-user-select');
         select.innerHTML = '<option value="">-- Select User --</option>';
         allUsers.forEach(user => {
-            select.innerHTML += `<option value="${user.id}">${user.username}</option>`;
+            const opt = document.createElement('option');
+            opt.value = String(Number(user.id));
+            opt.textContent = user.username;
+            select.appendChild(opt);
         });
     };
 
@@ -677,29 +736,67 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById(modalId).classList.add('hidden');
     };
 
-    const logout = () => {
-        showLogin();
-        localStorage.removeItem('access_token');
+    const clearSessionLocal = () => {
         currentUser = null;
+        isAdmin = false;
         stations = [];
+        currentStationId = null;
+        showLogin();
+    };
+
+    // Server-side logout: clears the HttpOnly auth + CSRF cookies.
+    // Tolerates 404 (backend not yet migrated) — local state is cleared anyway.
+    const logout = async () => {
+        try {
+            await apiRequest('/api/logout', 'POST');
+        } catch {
+            // ignore — still clear local state below
+        }
+        clearSessionLocal();
     };
 
     document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = e.target.username.value;
+        clearLoginMessage();
+        const submitBtn = document.getElementById('login-submit-btn');
+        const username = e.target.username.value.trim();
         const password = e.target.password.value;
 
-        const response = await apiRequest('/api/login', 'POST', { username, password });
-        if (!response) return;
+        if (!username || !password) {
+            showLoginMessage('Username and password are required');
+            return;
+        }
 
-        const data = await response.json();
-        if (response.ok) {
-            localStorage.setItem('access_token', data.access_token);
-            showDashboard();
-        } else {
-            document.getElementById('login-message').textContent = data.msg || 'Login failed';
+        submitBtn.disabled = true;
+        try {
+            const response = await apiRequest('/api/login', 'POST', { username, password });
+            if (!response) {
+                // apiRequest already toasted on network error; keep box hidden unless HTTP error.
+                return;
+            }
+
+            let data = {};
+            try {
+                data = await response.json();
+            } catch {
+                data = {};
+            }
+            if (response.ok) {
+                // Cookie mode: backend set HttpOnly cookies via Set-Cookie.
+                // No token in JS. Backwards-compat: if backend still returns
+                // access_token (pre-migration), ignore it — do NOT store it.
+                showDashboard();
+            } else {
+                // textContent via helper: backend msg cannot inject HTML.
+                showLoginMessage(data.msg || 'Login failed');
+            }
+        } finally {
+            submitBtn.disabled = false;
         }
     });
+
+    // Clear the error as soon as the user starts typing again.
+    document.getElementById('login-form').addEventListener('input', clearLoginMessage);
 
     document.getElementById('logout-button').addEventListener('click', logout);
 
@@ -773,8 +870,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('reset-password-form').addEventListener('submit', (e) => {
         e.preventDefault();
         const userId = document.getElementById('reset-user-id').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
+        const newPassword = document.getElementById('reset-new-password').value;
+        const confirmPassword = document.getElementById('reset-confirm-password').value;
         
         if (newPassword !== confirmPassword) {
             showToast('Passwords do not match', 'error');
@@ -789,11 +886,6 @@ document.addEventListener('DOMContentLoaded', () => {
         resetUserPassword(parseInt(userId), newPassword);
         e.target.reset();
     });
-
-    window.openResetPasswordModal = (userId) => {
-        document.getElementById('reset-user-id').value = userId;
-        openModal('modal-reset-password');
-    };
 
     const changeUserPassword = async (currentPassword, newPassword) => {
         const response = await apiRequest('/api/user/change-password', 'PUT', {
@@ -845,9 +937,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    if (localStorage.getItem('access_token')) {
-        showDashboard();
-    } else {
-        showLogin();
-    }
+    // Delegated actions (replaces inline onclick; CSP-friendly, no string injection).
+    document.addEventListener('click', (e) => {
+        const expandable = e.target.closest('.sensor-more[data-expandable]');
+        if (expandable) {
+            expandable.style.display = 'none';
+            const hidden = expandable.nextElementSibling;
+            if (hidden) hidden.style.display = 'inline';
+            return;
+        }
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const id = Number(btn.dataset.id);
+        if (!Number.isFinite(id)) return;
+        switch (btn.dataset.action) {
+            case 'view-station':
+                viewStationById(id);
+                break;
+            case 'delete-station':
+                deleteStationById(id);
+                break;
+            case 'delete-user':
+                deleteUserById(id);
+                break;
+            case 'reset-password':
+                openResetPasswordModalById(id);
+                break;
+        }
+    });
+
+    document.getElementById('copy-secret-btn')?.addEventListener('click', copySecret);
+
+    // Close modals with Escape.
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal:not(.hidden)').forEach(m => m.classList.add('hidden'));
+        }
+    });
+
+    // Boot: session lives in HttpOnly cookies, so probe the backend.
+    // showDashboard() -> loadUserProfile() succeeds only with a valid cookie.
+    showLogin(); // default view, replaced if profile probe succeeds
+    loadUserProfile().then((ok) => {
+        if (ok) {
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('dashboard-page').classList.remove('hidden');
+            clearLoginMessage();
+            const pwd = document.getElementById('password');
+            if (pwd) pwd.value = '';
+        }
+    });
 });

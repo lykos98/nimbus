@@ -304,6 +304,12 @@ body {
     color: var(--success);
 }
 
+/* Login submit disabled state (prevents double-submit confusion) */
+#login-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
 /* Dashboard Layout */
 .dashboard {
     display: flex;

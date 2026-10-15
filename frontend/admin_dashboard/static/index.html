@@ -16,20 +16,20 @@
                 <h1>Nimbus</h1>
                 <p>Admin Dashboard</p>
             </div>
-            <form id="login-form" class="login-form">
+            <form id="login-form" class="login-form" novalidate>
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required placeholder="Enter username">
+                    <input type="text" id="username" name="username" required placeholder="Enter username" autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required placeholder="Enter password">
+                    <input type="password" id="password" name="password" required placeholder="Enter password" autocomplete="current-password">
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">
+                <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block">
                     <i data-lucide="log-in"></i>
                     Sign In
                 </button>
-                <div id="login-message" class="message message-error"></div>
+                <div id="login-message" class="message message-error hidden" role="alert" aria-live="polite"></div>
             </form>
         </div>
     </div>
@@ -161,8 +161,8 @@
                     <div class="form-group">
                         <label>Secret</label>
                         <div class="secret-display">
-                            <input type="text" id="station-detail-secret" readonly class="secret-input">
-                            <button type="button" class="btn btn-ghost btn-sm" onclick="copySecret()">
+                            <input type="password" id="station-detail-secret" readonly class="secret-input" autocomplete="off">
+                            <button type="button" id="copy-secret-btn" class="btn btn-ghost btn-sm" aria-label="Copy secret">
                                 <i data-lucide="copy"></i>
                             </button>
                         </div>
@@ -284,11 +284,11 @@
             <form id="add-user-form" class="modal-body">
                 <div class="form-group">
                     <label for="new-username">Username</label>
-                    <input type="text" id="new-username" required placeholder="Enter username">
+                    <input type="text" id="new-username" required placeholder="Enter username" autocomplete="off" maxlength="64">
                 </div>
                 <div class="form-group">
                     <label for="new-password">Password</label>
-                    <input type="password" id="new-password" required placeholder="Enter password">
+                    <input type="password" id="new-password" required placeholder="Enter password" autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label class="checkbox-label">
@@ -320,12 +320,12 @@
                     <input type="text" id="reset-user-id" disabled>
                 </div>
                 <div class="form-group">
-                    <label for="new-password">New Password</label>
-                    <input type="password" id="new-password" required placeholder="Enter new password">
+                    <label for="reset-new-password">New Password</label>
+                    <input type="password" id="reset-new-password" required placeholder="Enter new password" autocomplete="new-password">
                 </div>
                 <div class="form-group">
-                    <label for="confirm-password">Confirm Password</label>
-                    <input type="password" id="confirm-password" required placeholder="Confirm new password">
+                    <label for="reset-confirm-password">Confirm Password</label>
+                    <input type="password" id="reset-confirm-password" required placeholder="Confirm new password" autocomplete="new-password">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost modal-close">Cancel</button>
@@ -377,15 +377,15 @@
             <form id="change-password-form" class="modal-body">
                 <div class="form-group">
                     <label for="current-password">Current Password</label>
-                    <input type="password" id="current-password" required placeholder="Enter current password">
+                    <input type="password" id="current-password" required placeholder="Enter current password" autocomplete="current-password">
                 </div>
                 <div class="form-group">
                     <label for="user-new-password">New Password</label>
-                    <input type="password" id="user-new-password" required placeholder="Enter new password">
+                    <input type="password" id="user-new-password" required placeholder="Enter new password" autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="user-confirm-password">Confirm New Password</label>
-                    <input type="password" id="user-confirm-password" required placeholder="Confirm new password">
+                    <input type="password" id="user-confirm-password" required placeholder="Confirm new password" autocomplete="new-password">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost modal-close">Cancel</button>

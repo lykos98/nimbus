@@ -9,7 +9,7 @@ from datetime import timedelta, datetime
 import psycopg2
 from psycopg2 import extras 
 from werkzeug.security import generate_password_hash, check_password_hash 
-from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity 
+from flask_jwt_extended import create_access_token, jwt_required, JWTManager, get_jwt_identity, set_access_cookies, unset_jwt_cookies 
 import jwt # For decoding for logging
 import sys # For direct stderr logging
 from utils import windows, validFields
@@ -33,8 +33,14 @@ if __name__ != '__main__':
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
 
-# JWT Configuration
-app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") 
+# JWT Configuration (cookie mode: token never touches JS/localStorage)
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
+# Accept cookies (new frontend) + headers (legacy Bearer during rollout).
+app.config["JWT_TOKEN_LOCATION"] = os.getenv("JWT_TOKEN_LOCATION", "cookies,headers").split(",")
+app.config["JWT_COOKIE_SECURE"] = os.getenv("JWT_COOKIE_SECURE", "1") == "1"  # 0 for plain-http local dev
+app.config["JWT_COOKIE_SAMESITE"] = os.getenv("JWT_COOKIE_SAMESITE", "Strict")
+app.config["JWT_COOKIE_CSRF_PROTECT"] = True
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=int(os.getenv("JWT_ACCESS_MINUTES", "15")))
 jwt_manager = JWTManager(app)
 
 def get_db_connection():
@@ -74,8 +80,19 @@ def login():
     if user and check_password_hash(user["password_hash"], password):
         # CORRECT: Use a simple string for the identity
         access_token = create_access_token(identity=str(user["id"]))
-        return jsonify(access_token=access_token), 200
+        # Cookie mode: token goes in HttpOnly Set-Cookie, NOT in the JSON body.
+        resp = jsonify({"msg": "login successful"})
+        set_access_cookies(resp, access_token)
+        return resp, 200
     return jsonify({"msg": "Bad username or password"}), 401
+
+
+@app.route("/api/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    resp = jsonify({"msg": "logout successful"})
+    unset_jwt_cookies(resp)
+    return resp, 200
 
 
 # Version endpoint for debugging deployment
