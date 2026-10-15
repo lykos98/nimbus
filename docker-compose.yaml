@@ -67,8 +67,6 @@ services:
       nofile:
         soft: 131072
         hard: 131072
-    sysctls:
-      - fs.file-max=131072
     deploy:
       resources:
         limits:
